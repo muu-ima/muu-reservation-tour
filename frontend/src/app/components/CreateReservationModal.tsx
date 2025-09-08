@@ -70,8 +70,9 @@ export default function CreateReservationModal({
                     className="grid grid-cols-1 sm:grid-cols-2 gap-3"
                     onSubmit={async (e) => {
                         e.preventDefault();
+
                         // 送信前にネイティブ必須チェックを走らせ、最初の未入力へスクロール
-                        const form = e.currentTarget;
+                        const form = e.currentTarget as HTMLFormElement;
                         if (!form.reportValidity()) {
                             const firstInvalid = form.querySelector(":invalid") as HTMLElement | null;
                             if (firstInvalid) {
@@ -81,12 +82,34 @@ export default function CreateReservationModal({
                             }
                             return;
                         }
+
+                        // 送信前に値を正規化（トリム＆小文字化）
+                        const normalize = (s?: string | null) => (s ?? "").trim();
+
+                        const payload: ReservationCreatePayload = {
+                            date: draft.date,                                          // 'YYYY-MM-DD'
+                            program: (draft.program || "").toLowerCase() as Program,   // 'tour' | 'experience'
+                            slot: (draft.slot || "").toLowerCase() as Slot,            // 'am' | 'pm' | 'full'
+                            room: draft.room ?? null,                                  // nullable
+
+                            // 文字列はトリムして送る（型が string のままにしてあります）
+                            name: normalize(draft.name),
+                            last_name: normalize(draft.last_name),
+                            first_name: normalize(draft.first_name),
+                            email: normalize(draft.email),
+                            phone: normalize(draft.phone),
+                            notebook_type: normalize(draft.notebook_type),
+                            has_certificate: !!draft.has_certificate,
+                            note: normalize(draft.note),
+                        };
+
                         try {
-                            await onSubmit(draft);
+                            await onSubmit(payload);
                         } catch (err) {
                             alert(getErrorMessage(err));
                         }
                     }}
+
                 >
                     {/* 日付 */}
                     <label className="text-sm">
@@ -175,11 +198,12 @@ export default function CreateReservationModal({
                             type="tel"
                             className="w-full rounded-lg border px-3 py-1.5"
                             value={draft.phone ?? ""}
-                            onChange={(e) => setDraft((d) => ({ ...d, phone: e.target.value }))}
+                            onChange={(e) => setDraft(d => ({ ...d, phone: e.target.value }))}
                             inputMode="tel"
                             autoComplete="tel"
-                             pattern="[0-9()\-\+ ]{8,}"
+                            pattern="[0-9()+ -]{8,}"   // ← これに変更（\s を使わない）
                         />
+
                     </label>
 
                     {/* その他 */}
