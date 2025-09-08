@@ -8,7 +8,7 @@ import ReservationTable, {
     Slot,
 } from "../components/ReservationTable";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://muu-reservation.onrender.com/";
 const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN ?? ""; // 開発用の簡易PIN
 
 type Filters = {
@@ -21,6 +21,18 @@ type Filters = {
     keyword: string;
 };
 
+// ===== ユーティリティ =====
+
+// backend の古いレスポンスに name が含まれる場合の後方互換用
+function legacyName(obj: unknown): string {
+    if (typeof obj === "object" && obj !== null) {
+        const maybe = (obj as Record<string, unknown>).name;
+        return typeof maybe === "string" ? maybe : "";
+    }
+    return "";
+}
+
+// ===== 画面 =====
 const INITIAL_FILTERS: Filters = {
     dateFrom: "",
     dateTo: "",
@@ -64,6 +76,7 @@ export default function AdminPage() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
+    const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
     const fetchReservations = async () => {
         setLoading(true);
         setError(null);
@@ -73,10 +86,12 @@ export default function AdminPage() {
                 cache: "no-store",
             });
             if (!res.ok) throw new Error(`GET /reservations failed: ${res.status}`);
-            const data: Reservation[] = await res.json();
+            // APIが型どおり返す前提で unknown → Reservation[] にキャスト
+            const data = (await res.json()) as unknown as Reservation[];
             setItems(data);
-        } catch (e: any) {
-            setError(e?.message ?? String(e));
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            setError(msg);
         } finally {
             setLoading(false);
         }
@@ -102,8 +117,8 @@ export default function AdminPage() {
             const updated: Reservation = await res.json();
             setItems((prev) => prev?.map((r) => (r.id === id ? updated : r)) ?? null);
             setSuccess("状態を更新しました");
-        } catch (e: any) {
-            setError(e?.message ?? String(e));
+        } catch (e: unknown) {
+            setError(errMsg(e));
         }
     };
 
@@ -122,10 +137,12 @@ export default function AdminPage() {
             }
             setItems((prev) => prev?.filter((r) => r.id !== id) ?? null);
             setSuccess("削除しました");
-        } catch (e: any) {
-            setError(e?.message ?? String(e));
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            setError(msg);
         }
     };
+
 
     // --- filters ---
     const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS);
