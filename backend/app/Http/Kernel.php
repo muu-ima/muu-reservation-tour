@@ -39,8 +39,10 @@ class Kernel extends HttpKernel
         ],
 
         'api' => [
-            'throttle:60,1',
-            'bindings',
+        \Illuminate\Http\Middleware\HandleCors::class, // 念のため最初に
+        \App\Http\Middleware\ForceCors::class,         // ★ 追加：エラー時でもCORSを付ける保険
+        'throttle:60,1',
+        'bindings',
         ],
     ];
 

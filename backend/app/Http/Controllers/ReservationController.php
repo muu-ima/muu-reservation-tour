@@ -7,6 +7,10 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Str;
+
 
 class ReservationController extends Controller
 {
@@ -37,54 +41,102 @@ class ReservationController extends Controller
     /**
      * POST /api/reservations
      */
-    public function store(Request $request)
-    {
-        $data = $request->validate([
-            'date'    => ['required','date'],
-            'program' => ['required', Rule::in(['tour','experience'])],
-            'slot'    => ['required', Rule::in(['am','pm','full'])],
-            'status'  => ['nullable', Rule::in(['booked','done','cancelled'])],
-            'room'    => ['nullable','string','max:16'],
+public function store(\Illuminate\Http\Request $request)
+{
+     // ★一時プローブ：ここまで来ているか確認（あとで削除）
+    return response()->json(['probe' => 'store-hit'], 418);
+    try {
+        // 0) 軽い正規化
+        if ($request->filled('phone')) {
+            $request->merge(['phone' => mb_convert_kana($request->input('phone'), 'as')]);
+        }
+        foreach (['name','last_name','first_name','email','phone','contact','notebook_type','note','room'] as $k) {
+            if ($request->filled($k) && is_string($request->$k)) {
+                $request->merge([$k => trim($request->$k)]);
+            }
+        }
 
-            // 氏名系（任意）
+        // 1) 厳格バリデーション（422）
+        $data = $request->validate([
+            'date'    => ['required','date_format:Y-m-d'], // ← YYYY-MM-DD を強制
+            'program' => ['required', \Illuminate\Validation\Rule::in(['tour','experience'])],
+            'slot'    => ['required', \Illuminate\Validation\Rule::in(['am','pm','full'])],
+            'status'  => ['nullable', \Illuminate\Validation\Rule::in(['booked','done','cancelled'])],
+            'room'    => ['nullable','string','max:16'],
             'name'       => ['nullable','string','max:191'],
             'last_name'  => ['nullable','string','max:191'],
             'first_name' => ['nullable','string','max:191'],
-
-            // 連絡先
             'email' => ['nullable','email','max:191'],
-            'phone' => ['nullable','string','max:32'],
-
-            // 任意メタ
+            'phone' => ['nullable','string','max:32','regex:/^[0-9()+\s-]{8,}$/u'],
             'contact'        => ['nullable','string','max:191'],
             'notebook_type'  => ['nullable','string','max:32'],
             'has_certificate'=> ['nullable','boolean'],
             'note'           => ['nullable','string','max:2000'],
+        ], [
+            'date.date_format' => 'date は YYYY-MM-DD 形式で送ってください。',
+            'phone.regex'      => '電話番号は数字、+、( )、-、スペースのみ／8文字以上にしてください。',
         ]);
 
-        // tour は full を禁止
+        // 2) 業務ルール（422）
         if (($data['program'] ?? null) === 'tour' && ($data['slot'] ?? null) === 'full') {
-            return response()->json(['message' => 'tour は full を選べません'], Response::HTTP_UNPROCESSABLE_ENTITY, [], $this->jsonFlags);
+            return response()->json(['message' => 'tour は full を選べません'], 422, $this->cors($request), $this->jsonFlags);
         }
 
-        // 既定値
+        // 3) 既定値 & name フォールバック
         $data['status'] = $data['status'] ?? 'booked';
         $data['has_certificate'] = (bool)($data['has_certificate'] ?? false);
-
-        // 氏名フォールバック（name が無ければ 姓+名 / それも無ければ 'ゲスト'）
         $data['name'] = $this->buildFallbackName($data);
 
-        // JST日付+slot → UTCの start/end を自動算出
+        // 4) JST日付+slot → UTC start/end
         [$startAt, $endAt] = $this->calcWindow($data['date'], $data['slot']);
         $data['start_at'] = $startAt;
         $data['end_at']   = $endAt;
 
-        // ★ 同一 program 限定の時間帯重複を禁止（cancelled は無視）
+        // 5) 重複チェック（あなたの既存ロジック）
         $this->assertNoProgramOverlap($data);
 
-        $created = Reservation::create($data);
-        return response()->json($created, 201, [], $this->jsonFlags);
+        // 6) 作成
+        $created = \App\Models\Reservation::create($data);
+        return response()->json($created, 201, $this->cors($request), $this->jsonFlags);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json(['message' => 'validation error', 'errors' => $e->errors()], 422, $this->cors($request), $this->jsonFlags);
+
+    } catch (\Illuminate\Database\QueryException $e) {
+        // DB 制約系：unique/重複など
+        $msg = $e->getMessage();
+        $isUnique = (($e->errorInfo[0] ?? null) === '23505') // Postgres unique_violation
+                 || (($e->errorInfo[1] ?? null) === 1062)    // MySQL duplicate entry
+                 || \Illuminate\Support\Str::contains($msg, ['unique','no_overlap','reservations_no_overlap']);
+        if ($isUnique) {
+            return response()->json(['message' => '同一時間帯の重複予約はできません。'], 409, $this->cors($request), $this->jsonFlags);
+        }
+        return response()->json(['message' => '不正なデータです。', 'debug' => $msg], 400, $this->cors($request), $this->jsonFlags);
+
+    } catch (\Throwable $e) {
+        // 想定外（デバッグ用にメッセージも返す→落ち着いたら debug を外す）
+        return response()->json(['message' => 'サーバーエラーが発生しました。', 'debug' => $e->getMessage()], 500, $this->cors($request), $this->jsonFlags);
     }
+}
+
+/**
+ * 例外時含め必ず CORS を付けるためのヘッダ生成
+ */
+private function cors(\Illuminate\Http\Request $request): array
+{
+    $origin = $request->headers->get('Origin');
+    $ok = $origin && (
+        preg_match('#^https://.*\.vercel\.app$#', $origin) ||
+        in_array($origin, ['https://muu-reservation.vercel.app','http://localhost:3000','https://localhost:3000'], true)
+    );
+    return $ok ? [
+        'Access-Control-Allow-Origin'  => $origin,
+        'Vary'                         => 'Origin',
+        'Access-Control-Allow-Methods' => 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With',
+    ] : [];
+}
+
 
     /**
      * PATCH /api/reservations/{reservation}
