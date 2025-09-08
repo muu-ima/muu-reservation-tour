@@ -43,8 +43,7 @@ class ReservationController extends Controller
      */
 public function store(\Illuminate\Http\Request $request)
 {
-     // ★一時プローブ：ここまで来ているか確認（あとで削除）
-    return response()->json(['probe' => 'store-hit'], 418);
+
     try {
         // 0) 軽い正規化
         if ($request->filled('phone')) {
