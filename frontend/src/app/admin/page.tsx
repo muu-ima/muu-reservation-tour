@@ -184,8 +184,8 @@ export default function AdminPage() {
                     r.email ?? "",
                     r.phone ?? "",
                     r.notebook_type ?? "",
-                    // バックエンドに name がある場合にもヒットさせる保険
-                    (r as any).name ?? "",
+                    // バックエンドに name がある場合にもヒットさせる保険（any回避）
+                    legacyName(r),
                 ]
                     .join(" ")
                     .toLowerCase();
