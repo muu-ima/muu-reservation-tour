@@ -6,72 +6,125 @@ use Throwable;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 
 use Illuminate\Database\QueryException;
-use Illuminate\Database\UniqueConstraintViolationException; 
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Str;
 
 class Handler extends ExceptionHandler
 {
     /**
-     * A list of the exception types that are not reported.
-     *
-     * @var array
+     * Laravel 10+ 形式
      */
-    protected $dontReport = [
-        'password',
-        'password_cofirmation'
+    protected $levels = [
+        // 例: \Illuminate\Auth\AuthenticationException::class => 'warning',
     ];
 
     /**
-     * A list of the inputs that are never flashed for validation exceptions.
-     *
-     * @var array
+     * ログに出さない例外（必要があれば指定）
+     */
+    protected $dontReport = [
+        // 例: \Illuminate\Auth\AuthenticationException::class,
+    ];
+
+    /**
+     * バリデーション時にフラッシュしない入力
      */
     protected $dontFlash = [
+        'current_password',
         'password',
         'password_confirmation',
     ];
 
-    /**
-     * Report or log an exception.
-     *
-     * @param  \Exception  $exception
-     * @return void
-     */
-    public function report(Throwable $exception)
+    public function report(Throwable $e): void
     {
-        parent::report($exception);
+        parent::report($e);
     }
 
-    /**
-     * Render an exception into an HTTP response.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Exception  $exception
-     * @return \Illuminate\Http\Response
-     */
-    public function render($request, Throwable $exception)
+    public function render($request, Throwable $e)
     {
-        return parent::render($request, $exception);
-    }
+        // JSON が欲しいクライアント向けの整形（必要最低限）
+        if ($request->expectsJson()) {
 
-     public function register(): void
-    {
-        // 9+ の専用例外（これが来たら無条件で 409）
-        $this->renderable(function (UniqueConstraintViolationException $e, $request) {
-            return response()->json([
-                'message' => '同じ日・同じ部屋の予約が既にあります。',
-            ], Response::HTTP_CONFLICT);
-        });
-
-        // 旧来（8系など）の QueryException を SQLSTATE で判定
-        $this->renderable(function (QueryException $e, $request) {
-            // SQLSTATE を取り出す（getCode が空のこともあるためフォールバック）
-            $sqlState = $e->getCode() ?: ($e->errorInfo[0] ?? null);
-            if ($sqlState === '23505') { // unique_violation
-                return response()->json([
-                    'message' => '同じ日・同じ部屋の予約が既にあります。',
-                ], Response::HTTP_CONFLICT);
+            // コントローラが返したレスポンスはそのまま通す
+            if ($e instanceof HttpResponseException) {
+                return $e->getResponse();
             }
+
+            // バリデーションは標準的な形で返す
+            if ($e instanceof ValidationException) {
+                return response()->json([
+                    'message' => '入力エラーです。',
+                    'errors'  => $e->errors(),
+                ], Response::HTTP_UNPROCESSABLE_ENTITY, [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+
+            // ここでは DB のユニーク違反は扱わない（register() の renderable で処理）
+            if ($e instanceof HttpExceptionInterface) {
+                return parent::render($request, $e);
+            }
+
+            return parent::render($request, $e);
+        }
+
+        return parent::render($request, $e);
+    }
+
+    public function register(): void
+    {
+        /**
+         * DBユニーク違反だけを 409 にマップ（reservations テーブルに限定）
+         * - Controller のメッセージを潰さないよう、ここで生成するのは
+         *   「DBが弾いた時だけ」。
+         */
+        $this->renderable(function (UniqueConstraintViolationException $e, $request) {
+            if (!$request->expectsJson()) return null;
+
+            $msg = (string)$e->getMessage();
+            if ($this->isReservationsUniqueViolation($msg)) {
+            return response()->json([
+                'message' => 'その時間帯は埋まっています',
+                'source'  => 'handler:unique_violation',
+            ], Response::HTTP_CONFLICT, [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+            return null;
         });
+
+        // 旧来/他DBドライバ: QueryException からも捕捉（SQLSTATE=23505 等）
+        $this->renderable(function (QueryException $e, $request) {
+            if (!$request->expectsJson()) return null;
+
+            $sqlState = $e->getCode() ?: ($e->errorInfo[0] ?? null);
+            $msg = (string)$e->getMessage();
+
+            $isUnique = ($sqlState === '23505') // PostgreSQL unique_violation
+                || Str::contains($msg, ['UNIQUE constraint failed', 'duplicate key']);
+
+            if ($isUnique && $this->isReservationsUniqueViolation($msg)) {
+                return response()->json([
+                    'message' => 'その時間帯は埋まっています',
+                ], Response::HTTP_CONFLICT, [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+            return null;
+        });
+    }
+
+    /**
+     * reservations テーブル由来のユニーク違反かどうかを判定
+     * （他テーブルのユニークはここで横取りしない）
+     */
+    private function isReservationsUniqueViolation(string $message): bool
+    {
+        // 典型例:
+        // - duplicate key value violates unique constraint "reservations_***"
+        // - UNIQUE constraint failed: reservations.***
+        return Str::contains($message, [
+            'reservations_',      // PG のインデックス名
+            'reservations.',      // SQLite のテーブル名付き
+            'reservations ',      // 保険
+            'on table "reservations"',
+        ]);
     }
 }

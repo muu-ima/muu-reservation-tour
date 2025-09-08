@@ -1,0 +1,7 @@
+[90m= [39m[
+    {#5935
+      +"[1mconname[22m": "[32mreservations_date_room_unique[39m",
+      +"[1mdef[22m": "[32mUNIQUE (date, room)[39m",
+    },
+  ]
+

@@ -1,0 +1,23 @@
+[90m= [39m[
+    {#5935
+      +"[1mindexname[22m": "[32mreservations_pkey[39m",
+      +"[1mindexdef[22m": "[32mCREATE UNIQUE INDEX reservations_pkey ON public.reservations USING btree (id)[39m",
+    },
+    {#5949
+      +"[1mindexname[22m": "[32mreservations_date_program_slot_index[39m",
+      +"[1mindexdef[22m": "[32mCREATE INDEX reservations_date_program_slot_index ON public.reservations USING btree (date, program, slot)[39m",
+    },
+    {#5950
+      +"[1mindexname[22m": "[32mreservations_no_overlap[39m",
+      +"[1mindexdef[22m": "[32mCREATE INDEX reservations_no_overlap ON public.reservations USING gist (room, tsrange(start_at, end_at, '[]'::text))[39m",
+    },
+    {#5951
+      +"[1mindexname[22m": "[32mreservations_date_room_unique[39m",
+      +"[1mindexdef[22m": "[32mCREATE UNIQUE INDEX reservations_date_room_unique ON public.reservations USING btree (date, room)[39m",
+    },
+    {#5952
+      +"[1mindexname[22m": "[32mreservations_last_name_first_name_index[39m",
+      +"[1mindexdef[22m": "[32mCREATE INDEX reservations_last_name_first_name_index ON public.reservations USING btree (last_name, first_name)[39m",
+    },
+  ]
+
