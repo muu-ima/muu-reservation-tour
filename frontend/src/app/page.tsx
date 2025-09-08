@@ -17,7 +17,7 @@ import { motion, AnimatePresence } from "framer-motion"
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
 // ============================================
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "https://muu-reservation.onrender.com/";
 
 // ========= 日付ユーティリティ =========
 const toDateStr = (d: string | Date) => {

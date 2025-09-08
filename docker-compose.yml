@@ -6,7 +6,7 @@ services:
       context: ./backend   # LaravelのDockerfileがあるディレクトリ
     container_name: laravel-backend
     ports:
-      - "8000:80"       # Laravelのポート（例）
+      - "8081:80"       # Laravelのポート（例）
     volumes:
       - ./backend:/var/www/html
     environment:
