@@ -43,7 +43,14 @@ class ReservationController extends Controller
     public function store(\Illuminate\Http\Request $request)
     {
         try {
+            \Log::info('req', $request->all()); // 受け取りログ
+
+            // 既存のバリデーション＆保存ロジック
+            // $validated = validator(...)->validate();
+            // $r = Reservation::create($validated);
+            // return response()->json($r, 201, $this->cors($request), $this->jsonFlags);
             // 0) 軽い正規化
+
             if ($request->filled('phone')) {
                 $request->merge(['phone' => mb_convert_kana($request->input('phone'), 'as')]);
             }
@@ -118,6 +125,12 @@ class ReservationController extends Controller
             if (config('app.debug')) {
                 $payload['exception'] = get_class($e);
                 $payload['detail'] = (string) $e->getMessage();
+                \Log::error('store error', [
+                    'msg' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => collect($e->getTrace())->take(3),
+                ]);
             }
 
             return response()->json($payload, $status, $this->cors($request), $this->jsonFlags);

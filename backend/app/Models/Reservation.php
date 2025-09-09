@@ -10,6 +10,9 @@ class Reservation extends Model
 {
     use HasFactory;
 
+    // ★ 一時的に全カラムを一括代入許可
+    protected $guarded = [];
+
     // 一括代入を許可するカラム
     protected $fillable = [
         'date', 'program', 'slot', 'room', 'name', 'contact', 'note', 'status', 'start_at', 'end_at',
