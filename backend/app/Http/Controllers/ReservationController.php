@@ -45,10 +45,7 @@ class ReservationController extends Controller
      */
 public function store(\Illuminate\Http\Request $request)
 {
-header('X-Release: '.(getenv('RENDER_GIT_COMMIT') ?: trim(@exec('git rev-parse --short HEAD'))));
-header('X-Controller-MTime: '.@filemtime(__FILE__));
     try {
-        throw new \Illuminate\Http\Exceptions\HttpResponseException($this->overlapResponse($request));
         // 0) 軽い正規化
         if ($request->filled('phone')) {
             $request->merge(['phone' => mb_convert_kana($request->input('phone'), 'as')]);
@@ -96,11 +93,7 @@ header('X-Controller-MTime: '.@filemtime(__FILE__));
         $data['end_at']   = $endAt;
 
         // 5) 重複チェック abort(409)
-if ($q->exists()) {
-    // ★ ここを abort(...) ではなく、返すべき 409 レスポンスを“例外”として投げる
-    throw new HttpResponseException($this->overlapResponse(request()));
-}
-
+        $this->assertNoProgramOverlap($data);
 
         // 6) 作成
         $created = Reservation::create($data);
