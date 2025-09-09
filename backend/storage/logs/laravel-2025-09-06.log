@@ -530,7 +530,7 @@ DETAIL:  Key (date, room)=(2025-09-11, A) already exists. (Connection: pgsql, SQ
 #55 {main}
 
 [previous exception] [object] (PDOException(code: 23505): SQLSTATE[23505]: Unique violation: 7 ERROR:  duplicate key value violates unique constraint \"reservations_date_room_unique\"
-DETAIL:  Key (date, room)=(2025-09-11, A) already exists. at /home/usermuu/muu-reservation/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:412)
+DETAIL:  Key (date, )=(2025-09-11, A) already exists. at /home/usermuu/muu-reservation/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:412)
 [stacktrace]
 #0 /home/usermuu/muu-reservation/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php(412): PDOStatement->execute()
 #1 /home/usermuu/muu-reservation/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php(800): Illuminate\\Database\\Connection->Illuminate\\Database\\{closure}()
@@ -591,7 +591,7 @@ DETAIL:  Key (date, room)=(2025-09-11, A) already exists. at /home/usermuu/muu-r
 #56 /home/usermuu/muu-reservation/backend/server.php(21): require_once('...')
 #57 {main}
 "} 
-[2025-09-06 03:35:26] local.ERROR: SQLSTATE[23505]: Unique violation: 7 ERROR:  duplicate key value violates unique constraint "reservations_date_room_unique"
+[2025-09-06 03:35:26] local.ERROR: SQLSTATE[23505]: Unique violation: 7 ERROR:  duplicate key value violates unique constraint "reservations_date__unique"
 DETAIL:  Key (date, room)=(2025-09-11, A) already exists. (Connection: pgsql, SQL: insert into "reservations" ("date", "program", "slot", "name", "status", "has_certificate", "start_at", "end_at", "updated_at", "created_at") values (2025-09-11 00:00:00, tour, am, AM重複, booked, 0, 2025-09-11 01:30:00, 2025-09-11 03:00:00, 2025-09-06 03:35:26, 2025-09-06 03:35:26) returning "id") {"exception":"[object] (Illuminate\\Database\\UniqueConstraintViolationException(code: 23505): SQLSTATE[23505]: Unique violation: 7 ERROR:  duplicate key value violates unique constraint \"reservations_date_room_unique\"
 DETAIL:  Key (date, room)=(2025-09-11, A) already exists. (Connection: pgsql, SQL: insert into \"reservations\" (\"date\", \"program\", \"slot\", \"name\", \"status\", \"has_certificate\", \"start_at\", \"end_at\", \"updated_at\", \"created_at\") values (2025-09-11 00:00:00, tour, am, AM重複, booked, 0, 2025-09-11 01:30:00, 2025-09-11 03:00:00, 2025-09-06 03:35:26, 2025-09-06 03:35:26) returning \"id\") at /home/usermuu/muu-reservation/backend/vendor/laravel/framework/src/Illuminate/Database/Connection.php:808)
 [stacktrace]

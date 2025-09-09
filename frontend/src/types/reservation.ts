@@ -21,7 +21,6 @@ export interface Reservation {
     end_at?: string;
     contact?: string | null;
     note?: string | null;
-    room?: string | null;
     created_at?: string;
     updated_at?: string;
     // 追加項目
@@ -62,7 +61,6 @@ export type ReservationCreatePayload = {
     notebook_type?: string | null;
     has_certificate?: boolean | null;
     note?: string | null;
-    room?: string | null;
 };
 
 /** status の型ガード */

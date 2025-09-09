@@ -26,7 +26,6 @@ const emptyDraft: ReservationCreatePayload = {
     notebook_type: "",
     has_certificate: false,
     note: "",
-    room: null,
 };
 
 export default function CreateReservationModal({

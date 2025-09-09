@@ -15,7 +15,7 @@ class Reservation extends Model
 
     // 一括代入を許可するカラム
     protected $fillable = [
-        'date', 'program', 'slot', 'room', 'name', 'contact', 'note', 'status', 'start_at', 'end_at',
+        'date', 'program', 'slot', 'name', 'contact', 'note', 'status', 'start_at', 'end_at',
         'last_name', 'first_name', 'email', 'phone', 'notebook_type', 'has_certificate',
     ];
 

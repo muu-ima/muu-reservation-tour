@@ -54,7 +54,7 @@ class ReservationController extends Controller
             if ($request->filled('phone')) {
                 $request->merge(['phone' => mb_convert_kana($request->input('phone'), 'as')]);
             }
-            foreach (['name', 'last_name', 'first_name', 'email', 'phone', 'contact', 'notebook_type', 'note', 'room'] as $k) {
+            foreach (['name', 'last_name', 'first_name', 'email', 'phone', 'contact', 'notebook_type', 'note'] as $k) {
                 if ($request->filled($k) && is_string($request->$k)) {
                     $request->merge([$k => trim($request->$k)]);
                 }
@@ -66,7 +66,6 @@ class ReservationController extends Controller
                 'program' => ['required', \Illuminate\Validation\Rule::in(['tour', 'experience'])],
                 'slot' => ['required', \Illuminate\Validation\Rule::in(['am', 'pm', 'full'])],
                 'status' => ['nullable', \Illuminate\Validation\Rule::in(['booked', 'done', 'cancelled'])],
-                'room' => ['nullable', 'string', 'max:16'],
                 'name' => ['nullable', 'string', 'max:191'],
                 'last_name' => ['nullable', 'string', 'max:191'],
                 'first_name' => ['nullable', 'string', 'max:191'],
@@ -233,7 +232,6 @@ class ReservationController extends Controller
             'program' => ['sometimes', Rule::in(['tour', 'experience'])],
             'slot' => ['sometimes', Rule::in(['am', 'pm', 'full'])],
             'status' => ['sometimes', Rule::in(['booked', 'done', 'cancelled'])],
-            'room' => ['sometimes', 'nullable', 'string', 'max:16'],
 
             'name' => ['sometimes', 'nullable', 'string', 'max:191'],
             'last_name' => ['sometimes', 'nullable', 'string', 'max:191'],

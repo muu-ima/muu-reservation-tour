@@ -17,7 +17,6 @@ return new class extends Migration
             $table->date('date');                           // 予約日
             $table->string('program');                      // 'tour' | 'experience'
             $table->string('slot');                         // 'am'  | 'pm' | 'full'
-            $table->string('room')->default('A');           // 部屋/リリース
             $table->string('name');                         // 予約者
             $table->string('contact')->nullable();
             $table->text('note')->nullable();
