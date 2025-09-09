@@ -1,0 +1,15 @@
+[2025-09-09 01:34:05] local.ERROR: There are no commands defined in the "optimized" namespace.
+
+Did you mean this?
+    optimize {"exception":"[object] (Symfony\\Component\\Console\\Exception\\NamespaceNotFoundException(code: 0): There are no commands defined in the \"optimized\" namespace.
+
+Did you mean this?
+    optimize at /home/muu-ima/projects/muu-reservation/backend/vendor/symfony/console/Application.php:638)
+[stacktrace]
+#0 /home/muu-ima/projects/muu-reservation/backend/vendor/symfony/console/Application.php(687): Symfony\\Component\\Console\\Application->findNamespace()
+#1 /home/muu-ima/projects/muu-reservation/backend/vendor/symfony/console/Application.php(260): Symfony\\Component\\Console\\Application->find()
+#2 /home/muu-ima/projects/muu-reservation/backend/vendor/symfony/console/Application.php(169): Symfony\\Component\\Console\\Application->doRun()
+#3 /home/muu-ima/projects/muu-reservation/backend/vendor/laravel/framework/src/Illuminate/Foundation/Console/Kernel.php(196): Symfony\\Component\\Console\\Application->run()
+#4 /home/muu-ima/projects/muu-reservation/backend/artisan(35): Illuminate\\Foundation\\Console\\Kernel->handle()
+#5 {main}
+"} 

@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Reservation;
 use Illuminate\Http\Request;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Carbon;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\QueryException;
@@ -91,31 +93,99 @@ public function store(\Illuminate\Http\Request $request)
         $data['start_at'] = $startAt;
         $data['end_at']   = $endAt;
 
-        // 5) 重複チェック（あなたの既存ロジック）
-        $this->assertNoProgramOverlap($data);
+        // 5) 重複チェック abort(409)
+if ($q->exists()) {
+    // ★ ここを abort(...) ではなく、返すべき 409 レスポンスを“例外”として投げる
+    throw new HttpResponseException($this->overlapResponse(request()));
+}
+
 
         // 6) 作成
-        $created = \App\Models\Reservation::create($data);
-        return response()->json($created, 201, $this->cors($request), $this->jsonFlags);
+        $created = Reservation::create($data);
+        return response()->json($created->toArray(), 201, $this->cors($request), $this->jsonFlags);
 
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        return response()->json(['message' => 'validation error', 'errors' => $e->errors()], 422, $this->cors($request), $this->jsonFlags);
-
-    } catch (\Illuminate\Database\QueryException $e) {
-        // DB 制約系：unique/重複など
-        $msg = $e->getMessage();
-        $isUnique = (($e->errorInfo[0] ?? null) === '23505') // Postgres unique_violation
-                 || (($e->errorInfo[1] ?? null) === 1062)    // MySQL duplicate entry
-                 || \Illuminate\Support\Str::contains($msg, ['unique','no_overlap','reservations_no_overlap']);
-        if ($isUnique) {
-            return response()->json(['message' => '同一時間帯の重複予約はできません。'], 409, $this->cors($request), $this->jsonFlags);
+}catch (QueryException $e) {
+        if ($this->looksLikeOverlap($e)) {
+            return $this->overlapResponse($request);
         }
-        return response()->json(['message' => '不正なデータです。', 'debug' => $msg], 400, $this->cors($request), $this->jsonFlags);
+        throw $e;
 
-    } catch (\Throwable $e) {
-        // 想定外（デバッグ用にメッセージも返す→落ち着いたら debug を外す）
-        return response()->json(['message' => 'サーバーエラーが発生しました。', 'debug' => $e->getMessage()], 500, $this->cors($request), $this->jsonFlags);
+} catch (\Throwable $e) {
+    // ★ HttpResponseException はそのまま返す（409 JSON が完成済み）
+    if ($e instanceof HttpResponseException) {
+        return $e->getResponse();
     }
+
+    // 既存：日本語/英語の重複メッセージ判定
+    if ($this->looksLikeOverlap($e)) {
+        return $this->overlapResponse($request);
+    }
+
+    $status = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
+    $payload = ['message' => 'サーバーエラーが発生しました。'];
+    if (config('app.debug')) {
+        $payload['exception'] = get_class($e);
+        $payload['detail']    = (string)$e->getMessage();
+    }
+    return response()->json($payload, $status, $this->cors($request), $this->jsonFlags);
+}
+
+}
+
+/**
+ * 重複/オーバーラップ系の例外かどうかをざっくり判定（DB/アプリ層どちらも対応）
+ */
+private function looksLikeOverlap(\Throwable $e): bool
+{
+    $code     = (string)($e->getCode() ?? '');
+    $msg      = (string)$e->getMessage();
+    $msgLower = mb_strtolower($msg);
+
+    // DB 由来（SQLSTATE 等）
+    $sqlState = '';
+    if ($e instanceof QueryException) {
+        $sqlState = (string)($e->errorInfo[0] ?? '');
+    }
+
+    // 典型パターン
+    if ($sqlState === '23505') return true;                 // unique_violation
+    if ($sqlState === '23514') return true;                 // check_violation
+    if (strtoupper($code) === 'P0001') return true;         // RAISE EXCEPTION（既定）
+
+    // 制約名/トリガ名/英語文言
+    if (Str::contains($msgLower, [
+        'no_overlap',
+        'reservations_no_overlap',
+        'overlap',
+        'duplicate key value violates unique constraint',
+        'violates check constraint',
+    ])) return true;
+
+    // ★ 日本語文言（あなたの実メッセージを含む）
+    if (Str::contains($msg, [
+        '重複',
+        '時間帯が重複',
+        '同一プログラム',
+        '予約が重複',
+    ])) return true;
+
+    return false;
+}
+
+/** 重複時の共通レスポンス（409） */
+private function overlapResponse(Request $request)
+{
+    return response()->json(
+        [
+            'message' => 'duplicate/overlap',
+            'errors'  => [
+                'date_slot' => ['この枠は既に埋まっています。別の日時/枠を選んでください。'],
+            ],
+        ],
+        409,
+        $this->cors($request),
+        $this->jsonFlags
+    );
 }
 
 /**
@@ -248,7 +318,7 @@ private function cors(\Illuminate\Http\Request $request): array
         }
 
         if ($q->exists()) {
-            abort(Response::HTTP_CONFLICT, '同一プログラム内で時間帯が重複しています。');
+            throw new HttpResponseException($this->overlapResponse(request()));
         }
     }
 
