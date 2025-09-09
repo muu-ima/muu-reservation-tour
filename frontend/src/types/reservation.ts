@@ -113,7 +113,7 @@ export const isSlotAllowed = (program: Program, slot: Slot) => {
 
 /** slot に対応する時間帯を取得 */
 export const getSlotWindowJst = (program: Program, slot: Slot) =>
-    (SLOT_WINDOWS_JST as any)[program]?.[slot] ?? null;
+    SLOT_WINDOWS_JST[program][slot];
 
 /** 予約作成前のバリデーション */
 export function validateReservationDraft(d: {
