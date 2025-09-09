@@ -70,7 +70,7 @@ export default function CreateReservationModal({
                     onSubmit={async (e) => {
                         e.preventDefault();
 
-                        // 1) ネイティブ必須チェック
+                        // 1) HTMLの必須チェック
                         const form = e.currentTarget as HTMLFormElement;
                         if (!form.reportValidity()) {
                             const firstInvalid = form.querySelector(":invalid") as HTMLElement | null;
@@ -81,7 +81,7 @@ export default function CreateReservationModal({
                             return;
                         }
 
-                        // 2) 送信前の正規化
+                        // 2) 正規化ヘルパ
                         const nilIfEmpty = (v?: string | null) => {
                             const s = (v ?? "").trim();
                             return s === "" ? null : s;
@@ -95,7 +95,7 @@ export default function CreateReservationModal({
                                 .trim();
                         };
 
-                        // 3) slot ガード（見学(tour)では full 禁止）
+                        // 3) slot ガード（tour×full禁止）
                         const isSlotAllowed = (program: "tour" | "experience", slot: "am" | "pm" | "full") =>
                             program === "tour" ? slot === "am" || slot === "pm" : true;
 
@@ -103,7 +103,6 @@ export default function CreateReservationModal({
                             date: draft.date,                                            // 'YYYY-MM-DD'
                             program: (draft.program || "").toLowerCase() as Program,     // 'tour' | 'experience'
                             slot: (draft.slot || "").toLowerCase() as Slot,              // 'am' | 'pm' | 'full'
-                                                    
 
                             name: nilIfEmpty(draft.name),
                             last_name: nilIfEmpty(draft.last_name),
@@ -113,9 +112,8 @@ export default function CreateReservationModal({
                             notebook_type: nilIfEmpty(draft.notebook_type),
                             has_certificate: !!draft.has_certificate,
                             note: nilIfEmpty(draft.note),
-
-                            // status は必要な画面だけで指定。未指定なら送らない（サーバ既定 'booked'）
-                            ...(draft.status ? { status: draft.status } : {}),
+                            // room は完全削除済みのため送らない
+                            // status も現状は送らない
                         };
 
                         if (!isSlotAllowed(payload.program, payload.slot)) {
@@ -124,12 +122,13 @@ export default function CreateReservationModal({
                         }
 
                         try {
-                            await onSubmit(payload); // ← 既存のハンドラ呼び出しそのまま
+                            await onSubmit(payload);
                         } catch (err) {
-                            alert(getErrorMessage(err)); // api.ts 側で 422/409/500 を整形済み
+                            alert(getErrorMessage(err));
                         }
                     }}
                 >
+
                     {/* 日付 */}
                     <label className="text-sm">
                         <span className="block text-gray-600 mb-1">日付</span>
@@ -215,13 +214,13 @@ export default function CreateReservationModal({
                         <span className="block text-gray-600 mb-1">電話番号（任意）</span>
                         <input
                             type="tel"
-                            className="w-full rounded-lg border px-3 py-1.5"
-                            value={draft.phone ?? ""}
-                            onChange={(e) => setDraft(d => ({ ...d, phone: e.target.value }))}
+                            name="phone"
                             inputMode="tel"
                             autoComplete="tel"
-                            pattern="[0-9()+ -]{8,}"   // ← これに変更（\s を使わない）
+                            pattern="^[0-9()+\\s\\-]{8,}$"
+                            title="数字・() + - と空白のみ、8文字以上"
                         />
+
 
                     </label>
 

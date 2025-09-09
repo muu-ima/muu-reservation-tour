@@ -315,26 +315,61 @@ class ReservationController extends Controller
     }
 
     /**
-     * 同一 program 内の [start_at, end_at) 重複を禁止（cancelled は無視）
+     * 同一日の重複/占有ルールで409を返す
      *
-     * @param  array  $data  少なくとも program, start_at, end_at, status を含む
-     * @param  int|null  $ignoreId  自分自身を除外したいとき（更新時）
+     * 仕様:
+     * - tour: am/pm は別枠。→ 同じ date+program+slot が存在したらNG
+     * - experience:
+     *     - full はその日の experience を占有。→ 同日に experience が1件でもあればNG
+     *     - am / pm は同日共存OK。ただし:
+     *         - 同日に full があればNG
+     *         - 同じ slot が既にあればNG
+     *
+     * 対象は status='booked' のみ。
      */
-    private function assertNoProgramOverlap(array $data, ?int $ignoreId = null): void
+    protected function assertNoProgramOverlap(array $data): void
     {
-        $q = Reservation::query()
-            ->where('program', $data['program'])
-            ->whereNotIn('status', ['cancelled'])
-            // A.start < B.end && A.end > B.start で交差判定
-            ->where('start_at', '<', $data['end_at'])
-            ->where('end_at', '>', $data['start_at']);
+        $date = $data['date'] ?? null;
+        $program = $data['program'] ?? null;
+        $slot = $data['slot'] ?? null;
 
-        if ($ignoreId) {
-            $q->where('id', '<>', $ignoreId);
+        if (! $date || ! $program || ! $slot) {
+            // 必須が欠けている場合はここでは判定しない（前段のバリデで弾く想定）
+            return;
         }
 
-        if ($q->exists()) {
-            throw new HttpResponseException($this->overlapResponse(request()));
+        $base = \App\Models\Reservation::query()
+            ->whereDate('date', $date)
+            ->where('program', $program)
+            ->where('status', 'booked');
+
+        $exists = false;
+
+        if ($program === 'tour') {
+            // tour: 同日の同一slot のみ重複禁止
+            $exists = (clone $base)->where('slot', $slot)->exists();
+
+        } else { // experience
+            if ($slot === 'full') {
+                // full: その日の experience が1件でもあればアウト
+                $exists = (clone $base)->exists();
+            } else {
+                // am/pm: その日に full があればアウト
+                $exists = (clone $base)->where('slot', 'full')->exists();
+                if (! $exists) {
+                    // 同一slot の重複もアウト
+                    $exists = (clone $base)->where('slot', $slot)->exists();
+                }
+            }
+        }
+
+        if ($exists) {
+            abort(response()->json([
+                'message' => 'duplicate/overlap',
+                'errors' => [
+                    'date_slot' => ['この枠は既に埋まっています。別の日時/スロットを選んでください。'],
+                ],
+            ], 409));
         }
     }
 
