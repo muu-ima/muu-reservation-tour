@@ -1,9 +1,9 @@
 <?php
 
+use App\Http\Controllers\ReservationController;
+use App\Http\Middleware\DevCors;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Middleware\DevCors;
-use App\Http\Controllers\ReservationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,8 +26,8 @@ Route::middleware([DevCors::class])->group(function () {
     // ヘルスチェック
     Route::get('/healthz', function () {
         return response()->json([
-            'ok'  => true,
-            'ts'  => now()->toIso8601String(),
+            'ok' => true,
+            'ts' => now()->toIso8601String(),
             'app' => config('app.name'),
         ], 200);
     });

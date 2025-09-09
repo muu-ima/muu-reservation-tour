@@ -2,7 +2,7 @@
 
 return [
     'paths' => ['api/*'],
-    'allowed_methods' => ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+    'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 
     // ★ 完全一致（末尾 / なし）
     'allowed_origins' => [

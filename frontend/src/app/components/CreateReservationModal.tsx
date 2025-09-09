@@ -71,45 +71,65 @@ export default function CreateReservationModal({
                     onSubmit={async (e) => {
                         e.preventDefault();
 
-                        // 送信前にネイティブ必須チェックを走らせ、最初の未入力へスクロール
+                        // 1) ネイティブ必須チェック
                         const form = e.currentTarget as HTMLFormElement;
                         if (!form.reportValidity()) {
                             const firstInvalid = form.querySelector(":invalid") as HTMLElement | null;
                             if (firstInvalid) {
                                 firstInvalid.scrollIntoView({ block: "center", behavior: "smooth" });
-                                // iOS の表示ズレ対策：直後にフォーカス
                                 (firstInvalid as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).focus();
                             }
                             return;
                         }
 
-                        // 送信前に値を正規化（トリム＆小文字化）
-                        const normalize = (s?: string | null) => (s ?? "").trim();
-
-                        const payload: ReservationCreatePayload = {
-                            date: draft.date,                                          // 'YYYY-MM-DD'
-                            program: (draft.program || "").toLowerCase() as Program,   // 'tour' | 'experience'
-                            slot: (draft.slot || "").toLowerCase() as Slot,            // 'am' | 'pm' | 'full'
-                            room: draft.room ?? null,                                  // nullable
-
-                            // 文字列はトリムして送る（型が string のままにしてあります）
-                            name: normalize(draft.name),
-                            last_name: normalize(draft.last_name),
-                            first_name: normalize(draft.first_name),
-                            email: normalize(draft.email),
-                            phone: normalize(draft.phone),
-                            notebook_type: normalize(draft.notebook_type),
-                            has_certificate: !!draft.has_certificate,
-                            note: normalize(draft.note),
+                        // 2) 送信前の正規化
+                        const nilIfEmpty = (v?: string | null) => {
+                            const s = (v ?? "").trim();
+                            return s === "" ? null : s;
+                        };
+                        const toAsciiPhone = (s?: string | null) => {
+                            const t = (s ?? "").trim();
+                            if (!t) return null;
+                            return t
+                                .replace(/[０-９]/g, d => String.fromCharCode(d.charCodeAt(0) - 0xFEE0)) // 全角→半角(数字)
+                                .replace(/\u3000/g, " ") // 全角スペース→半角
+                                .trim();
                         };
 
+                        // 3) slot ガード（見学(tour)では full 禁止）
+                        const isSlotAllowed = (program: "tour" | "experience", slot: "am" | "pm" | "full") =>
+                            program === "tour" ? slot === "am" || slot === "pm" : true;
+
+                        const payload: ReservationCreatePayload = {
+                            date: draft.date,                                            // 'YYYY-MM-DD'
+                            program: (draft.program || "").toLowerCase() as Program,     // 'tour' | 'experience'
+                            slot: (draft.slot || "").toLowerCase() as Slot,              // 'am' | 'pm' | 'full'
+                            room: draft.room ?? null,                                    // nullable
+
+                            name: nilIfEmpty(draft.name),
+                            last_name: nilIfEmpty(draft.last_name),
+                            first_name: nilIfEmpty(draft.first_name),
+                            email: nilIfEmpty(draft.email),
+                            phone: toAsciiPhone(draft.phone),
+                            notebook_type: nilIfEmpty(draft.notebook_type),
+                            has_certificate: !!draft.has_certificate,
+                            note: nilIfEmpty(draft.note),
+
+                            // status は必要な画面だけで指定。未指定なら送らない（サーバ既定 'booked'）
+                            ...(draft.status ? { status: draft.status } : {}),
+                        };
+
+                        if (!isSlotAllowed(payload.program, payload.slot)) {
+                            alert("見学(tour)では full は選べません。");
+                            return;
+                        }
+
                         try {
-                            await onSubmit(payload);
+                            await onSubmit(payload); // ← 既存のハンドラ呼び出しそのまま
                         } catch (err) {
-                            alert(getErrorMessage(err));
+                            alert(getErrorMessage(err)); // api.ts 側で 422/409/500 を整形済み
                         }
                     }}
-
                 >
                     {/* 日付 */}
                     <label className="text-sm">

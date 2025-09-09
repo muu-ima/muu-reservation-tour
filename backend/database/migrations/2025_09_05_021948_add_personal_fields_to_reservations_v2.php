@@ -25,11 +25,11 @@ return new class extends Migration
         // ※ name が "山田太郎" などスペース無しのケースは last_name に全量コピー
         //   名前を厳密に分割したい場合は別途ロジックを用意
         if (Schema::hasColumn('reservations', 'name')) {
-            DB::statement("
+            DB::statement('
                 UPDATE reservations
                 SET last_name = COALESCE(last_name, name)
                 WHERE name IS NOT NULL AND last_name IS NULL
-            ");
+            ');
         }
     }
 

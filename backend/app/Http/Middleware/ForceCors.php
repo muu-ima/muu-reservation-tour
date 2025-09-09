@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Middleware;
 
 use Closure;
@@ -23,9 +24,10 @@ class ForceCors
         if ($ok) {
             $res->headers->set('Access-Control-Allow-Origin', $origin);
             $res->headers->set('Vary', 'Origin');
-            $res->headers->set('Access-Control-Allow-Methods','GET, POST, PUT, PATCH, DELETE, OPTIONS');
-            $res->headers->set('Access-Control-Allow-Headers','Content-Type, Authorization, X-Requested-With');
+            $res->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+            $res->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
+
         return $res;
     }
 }

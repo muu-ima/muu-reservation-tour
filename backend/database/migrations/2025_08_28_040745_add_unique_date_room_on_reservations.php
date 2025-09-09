@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('reservations', function (Blueprint $table) {
             // 「同じ日 × 同じ部屋」を一意にする
-            $table->unique(['date','room'], 'reservations_date_room_unique');
+            $table->unique(['date', 'room'], 'reservations_date_room_unique');
         });
     }
 

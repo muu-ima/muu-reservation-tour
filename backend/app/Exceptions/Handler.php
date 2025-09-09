@@ -2,16 +2,15 @@
 
 namespace App\Exceptions;
 
-use Throwable;
-use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
-
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
-use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 class Handler extends ExceptionHandler
 {
@@ -57,7 +56,7 @@ class Handler extends ExceptionHandler
             if ($e instanceof ValidationException) {
                 return response()->json([
                     'message' => '入力エラーです。',
-                    'errors'  => $e->errors(),
+                    'errors' => $e->errors(),
                 ], Response::HTTP_UNPROCESSABLE_ENTITY, [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             }
 
@@ -80,24 +79,29 @@ class Handler extends ExceptionHandler
          *   「DBが弾いた時だけ」。
          */
         $this->renderable(function (UniqueConstraintViolationException $e, $request) {
-            if (!$request->expectsJson()) return null;
-
-            $msg = (string)$e->getMessage();
-            if ($this->isReservationsUniqueViolation($msg)) {
-            return response()->json([
-                'message' => 'その時間帯は埋まっています',
-                'source'  => 'handler:unique_violation',
-            ], Response::HTTP_CONFLICT, [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (! $request->expectsJson()) {
+                return null;
             }
+
+            $msg = (string) $e->getMessage();
+            if ($this->isReservationsUniqueViolation($msg)) {
+                return response()->json([
+                    'message' => 'その時間帯は埋まっています',
+                    'source' => 'handler:unique_violation',
+                ], Response::HTTP_CONFLICT, [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+
             return null;
         });
 
         // 旧来/他DBドライバ: QueryException からも捕捉（SQLSTATE=23505 等）
         $this->renderable(function (QueryException $e, $request) {
-            if (!$request->expectsJson()) return null;
+            if (! $request->expectsJson()) {
+                return null;
+            }
 
             $sqlState = $e->getCode() ?: ($e->errorInfo[0] ?? null);
-            $msg = (string)$e->getMessage();
+            $msg = (string) $e->getMessage();
 
             $isUnique = ($sqlState === '23505') // PostgreSQL unique_violation
                 || Str::contains($msg, ['UNIQUE constraint failed', 'duplicate key']);
@@ -107,6 +111,7 @@ class Handler extends ExceptionHandler
                     'message' => 'その時間帯は埋まっています',
                 ], Response::HTTP_CONFLICT, [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             }
+
             return null;
         });
     }
