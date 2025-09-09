@@ -103,7 +103,7 @@ export default function CreateReservationModal({
                             date: draft.date,                                            // 'YYYY-MM-DD'
                             program: (draft.program || "").toLowerCase() as Program,     // 'tour' | 'experience'
                             slot: (draft.slot || "").toLowerCase() as Slot,              // 'am' | 'pm' | 'full'
-                            room: draft.room ?? null,                                    // nullable
+                                                    
 
                             name: nilIfEmpty(draft.name),
                             last_name: nilIfEmpty(draft.last_name),
