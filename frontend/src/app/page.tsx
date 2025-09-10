@@ -81,6 +81,19 @@ export default function Page() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // しきい値パラメータ（好みに合わせて調整）
+  const SWIPE = {
+    minX: 48,       // 横スワイプの最低距離 px
+    minY: 48,       // 縦スワイプの最低距離 px
+    ratio: 1.25,    // 角度のしきい(横優先: ax > ay*ratio / 縦優先: ay > ax*ratio)
+    fastTime: 180,  // 高速スワイプ判定：経過(ms) 以下なら
+    fastDist: 24,   //   最低距離(px)をこれで救済
+  };
+
+  // 表示窓＆移動量（2週間表示＋1週送り）
+  const MOBILE_WINDOW_DAYS = 14;
+  const MOBILE_SHIFT_DAYS = 7;
+
 
   // 絞り込み（一覧用）
   const [filter, setFilter] = useState<ReservationFilterUI>(() => ({
@@ -114,6 +127,56 @@ export default function Page() {
     setCreateSlot(slot);
     setIsCreateOpen(true);
   }
+
+  // 月曜はじまりの週頭
+  const startOfWeekMon = (d: Date) => {
+    const x = new Date(d);
+    const wd = (x.getDay() + 6) % 7; // Mon=0
+    x.setDate(x.getDate() - wd);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+  const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, 1);
+
+  // モバイル用：週アンカー & フリック検出
+  const [mobileAnchor, setMobileAnchor] = useState<Date>(() => startOfWeekMon(new Date()));
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+
+  // 月が変わったらアンカーをその月の最初の週へ寄せ直し（calCursor がある前提）
+  useEffect(() => {
+    const first = new Date(calCursor);
+    first.setDate(1);
+    setMobileAnchor(startOfWeekMon(first));
+  }, [calCursor]);
+
+  // フリック（横=月／縦=週）
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.changedTouches[0];
+    setTouchStart({ x: t.clientX, y: t.clientY });
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.x;
+    const dy = t.clientY - touchStart.y;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+
+    // しきい値（SWIPE）で判定
+    const passX = ax >= SWIPE.minX;
+    const passY = ay >= SWIPE.minY;
+
+    if (ax > ay * SWIPE.ratio && passX) {
+      // —— 横方向：月移動（右=次月 / 左=前月）
+      setCalCursor((d) => addMonths(d, dx > 0 ? +1 : -1));
+    } else if (ay > ax * SWIPE.ratio && passY) {
+      // —— 縦方向：週移動（下=+1週 / 上=-1週）
+      setMobileAnchor((a) => addDays(a, dy > 0 ? +MOBILE_SHIFT_DAYS : -MOBILE_SHIFT_DAYS));
+    }
+    setTouchStart(null);
+  };
+
+
 
   // ===== Helpers
   const jstDateTime = (iso?: string) => {
@@ -490,85 +553,108 @@ export default function Page() {
           </AnimatePresence>
 
 
-          {/* ▼ モバイル用アジェンダ表示（スマホのみ） */}
-          <div className="md:hidden -mx-2">
-            <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden bg-white">
-              {monthCells.map((cell) => {
-                const dayItems = dayMap[cell.dateStr] ?? [];
-                const counts = dayItems.reduce<SlotCounts>(
-                  (acc, r) => ({ ...acc, [r.slot]: (acc[r.slot] ?? 0) + 1 }),
-                  { am: 0, pm: 0, full: 0 }
-                );
-                const total = dayItems.length;
-                const isToday = cell.dateStr === toDateStr(new Date());
-                const isWeekendCell = isWeekendStr(cell.dateStr);
-                const dow = new Date(cell.dateStr).getDay();
-                const w = ["日", "月", "火", "水", "木", "金", "土"][dow];
+          {/* ▼ モバイル用アジェンダ表示（スマホのみ, 週ビュー＋フリック） */}
+          <div
+            className="md:hidden -mx-2"
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+          >
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between px-2 pb-2">
+              <span className="text-sm text-gray-600">
+                {new Date(calCursor).getFullYear()}年 {new Date(calCursor).getMonth() + 1}月・週表示
+              </span>
+              <span className="text-[11px] text-gray-400">横:月 / 縦:週</span>
+            </div>
 
-                return (
-                  <li key={cell.dateStr}>
-                    <motion.div
-                      className="flex items-center gap-3 px-3 py-2 active:bg-gray-50"
-                      onClick={() =>
-                        setFilter((f) => ({ ...f, date: cell.dateStr, program: calProgram }))
-                      }
-                      role="button"
-                      tabIndex={0}
-                      title={`${cell.dateStr}の予約を一覧で表示`}
-                      initial={{ opacity: 0, y: 8 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: "-10% 0px -10% 0px" }}
-                      transition={{ duration: 0.18 }}
-                    >
-                      {/* 日付バッジ */}
-                      <div className={"w-14 shrink-0 text-center"}>
-                        <div className={"text-base leading-5 " + (isToday ? "font-semibold text-blue-600" : "text-gray-900")}>
-                          {cell.day}
-                        </div>
-                        <div className={"text-[10px] " + (isWeekendCell ? "text-red-500" : "text-gray-500")}>{w}</div>
-                      </div>
+            {(() => {
+              // 表示窓：MOBILE_WINDOW_DAYS 日分（例: 14日＝2週間）
+              const windowCells = Array.from({ length: MOBILE_WINDOW_DAYS }, (_, i) => {
+                const d = addDays(mobileAnchor, i);
+                const dateStr = toDateStr(d);
+                return { dateStr, day: d.getDate(), dow: d.getDay() };
+              });
 
-                      {/* 件数 / 先頭氏名 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          {total > 0 && (
-                            <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">{total}件</span>
-                          )}
-                          <div className="flex flex-wrap gap-1">
-                            {counts.full > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">FULL×{counts.full}</span>}
-                            {counts.am > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">AM×{counts.am}</span>}
-                            {counts.pm > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">PM×{counts.pm}</span>}
-                          </div>
-                        </div>
-                        {dayItems[0] && (
-                          <div className="mt-0.5 text-[11px] text-gray-500 truncate" aria-hidden>
-                            {(dayItems[0].last_name ?? "") + (dayItems[0].first_name ? ` ${dayItems[0].first_name}` : "")}
-                            {dayItems.length > 1 ? ` 他${dayItems.length - 1}件` : ""}
-                          </div>
-                        )}
-                      </div>
+              return (
+                <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden bg-white">
+                  {windowCells.map((cell) => {
+                    const dayItems = dayMap[cell.dateStr] ?? [];
+                    const counts = dayItems.reduce<Record<Slot, number>>(
+                      (acc, r) => ({ ...acc, [r.slot]: (acc[r.slot] ?? 0) + 1 }),
+                      { am: 0, pm: 0, full: 0 }
+                    );
+                    const total = dayItems.length;
+                    const isToday = cell.dateStr === toDateStr(new Date());
+                    const isWeekendCell = isWeekendStr(cell.dateStr);
+                    const w = ["日", "月", "火", "水", "木", "金", "土"][cell.dow];
 
-                      {/* 右端：＋ / 休 */}
-                      {!isWeekendCell ? (
-                        <button
-                          type="button"
-                          className="h-8 w-8 shrink-0 rounded-full border text-base leading-8 text-center bg-white hover:bg-gray-50"
-                          onClick={(e) => { e.stopPropagation(); openCreate(cell.dateStr); }}
-                          aria-label={`${cell.dateStr} に予約を追加`}
-                          title="この日に予約を追加"
-                        >＋</button>
-                      ) : (
+                    return (
+                      <li key={cell.dateStr}>
                         <div
-                          className="h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
-                          aria-disabled="true"
-                          title="土日は休業日のため新規は作成できません"
-                        >休</div>
-                      )}
-                    </motion.div>
-                  </li>
-                );
-              })}
-            </ul>
+                          className="flex items-center gap-3 px-3 py-2 active:bg-gray-50"
+                          onClick={() =>
+                            setFilter((f) => ({ ...f, date: cell.dateStr, program: calProgram }))
+                          }
+                          role="button"
+                          tabIndex={0}
+                          title={`${cell.dateStr}の予約を一覧で表示`}
+                        >
+                          {/* 日付バッジ（既存デザインのまま） */}
+                          <div className="w-14 shrink-0 text-center">
+                            <div className={"text-base leading-5 " + (isToday ? "font-semibold text-blue-600" : "text-gray-900")}>
+                              {cell.day}
+                            </div>
+                            <div className={"text-[10px] " + (isWeekendCell ? "text-red-500" : "text-gray-500")}>{w}</div>
+                          </div>
+
+                          {/* 件数 / 先頭氏名 */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              {total > 0 && (
+                                <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">{total}件</span>
+                              )}
+                              <div className="flex flex-wrap gap-1">
+                                {counts.full > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">FULL×{counts.full}</span>}
+                                {counts.am > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">AM×{counts.am}</span>}
+                                {counts.pm > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">PM×{counts.pm}</span>}
+                              </div>
+                            </div>
+                            {dayItems[0] && (
+                              <div className="mt-0.5 text-[11px] text-gray-500 truncate" aria-hidden>
+                                {(dayItems[0].last_name ?? "") + (dayItems[0].first_name ? ` ${dayItems[0].first_name}` : "")}
+                                {dayItems.length > 1 ? ` 他${dayItems.length - 1}件` : ""}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 右端：＋ / 休（既存ロジック維持） */}
+                          {!isWeekendCell ? (
+                            <button
+                              type="button"
+                              className="h-8 w-8 shrink-0 rounded-full border text-base leading-8 text-center bg-white hover:bg-gray-50"
+                              onClick={(e) => { e.stopPropagation(); openCreate(cell.dateStr); }}
+                              aria-label={`${cell.dateStr} に予約を追加`}
+                              title="この日に予約を追加"
+                            >＋</button>
+                          ) : (
+                            <div
+                              className="h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
+                              aria-disabled="true"
+                              title="土日は休業日のため新規は作成できません"
+                            >休</div>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              );
+            })()}
+
+
+            <p className="mt-2 text-xs text-gray-500">
+              右/左フリック＝月移動、下/上フリック＝1週送り。日付タップで一覧に反映。
+            </p>
           </div>
 
           <p className="text-xs text-gray-500">日付タップで一覧に反映。右端「＋」でその日に新規作成。</p>
