@@ -268,8 +268,13 @@ export default function CreateReservationModal({
                         {/* <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-xl border hover:bg-gray-50 shrink-0">
                             キャンセル
                         </button> */}
-                        <button type="submit" className="px-5 py-1.5 rounded-xl bg-blue-500 text-white  text-base font-semibold hover:opacity-90">
-                                送 信
+                        <button
+                            type="submit"
+                            className="w-full sm:flex-1 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold
+             hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+             disabled:opacity-60 disabled:cursor-not-allowed"
+                        // ← 下の2) とセット
+                        >                                送 信
                         </button>
                     </div>
                 </form>
