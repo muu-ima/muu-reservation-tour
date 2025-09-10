@@ -64,9 +64,9 @@ export default function CreateReservationModal({
     return (
         <Modal open={open} onClose={onClose} title="予約の追加">
             {/* モバイルで切れないように、ここをスクロール領域にする */}
-            <div className="max-h-[calc(100dvh-1rem)] md:max-h-[min(85vh,48rem)] overflow-y-auto">
+            <div className="max-h-[calc(100dvh-1rem)] md:max-h-[min(85vh,48rem)] overflow-y-auto w-full px-4">
                 <form
-                    className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                    className="grid grid-cols-1 gap-3"
                     onSubmit={async (e) => {
                         e.preventDefault();
 
@@ -100,10 +100,9 @@ export default function CreateReservationModal({
                             program === "tour" ? slot === "am" || slot === "pm" : true;
 
                         const payload: ReservationCreatePayload = {
-                            date: draft.date,                                            // 'YYYY-MM-DD'
-                            program: (draft.program || "").toLowerCase() as Program,     // 'tour' | 'experience'
-                            slot: (draft.slot || "").toLowerCase() as Slot,              // 'am' | 'pm' | 'full'
-
+                            date: draft.date,
+                            program: (draft.program || "").toLowerCase() as Program,
+                            slot: (draft.slot || "").toLowerCase() as Slot,
                             name: nilIfEmpty(draft.name),
                             last_name: nilIfEmpty(draft.last_name),
                             first_name: nilIfEmpty(draft.first_name),
@@ -112,8 +111,6 @@ export default function CreateReservationModal({
                             notebook_type: nilIfEmpty(draft.notebook_type),
                             has_certificate: !!draft.has_certificate,
                             note: nilIfEmpty(draft.note),
-                            // room は完全削除済みのため送らない
-                            // status も現状は送らない
                         };
 
                         if (!isSlotAllowed(payload.program, payload.slot)) {
@@ -128,7 +125,6 @@ export default function CreateReservationModal({
                         }
                     }}
                 >
-
                     {/* 日付 */}
                     <label className="text-sm">
                         <span className="block text-gray-600 mb-1">日付</span>
@@ -158,7 +154,7 @@ export default function CreateReservationModal({
                         </select>
                     </label>
 
-                    {/* スロット */}
+                    {/* 時間帯 */}
                     <label className="text-sm">
                         <span className="block text-gray-600 mb-1">時間帯</span>
                         <select
@@ -176,8 +172,7 @@ export default function CreateReservationModal({
                         </select>
                     </label>
 
-
-                    {/* 姓名 */}
+                    {/* 姓 */}
                     <label className="text-sm">
                         <span className="block text-gray-600 mb-1">姓</span>
                         <input
@@ -188,6 +183,8 @@ export default function CreateReservationModal({
                             required
                         />
                     </label>
+
+                    {/* 名 */}
                     <label className="text-sm">
                         <span className="block text-gray-600 mb-1">名</span>
                         <input
@@ -199,7 +196,7 @@ export default function CreateReservationModal({
                         />
                     </label>
 
-                    {/* 連絡先 */}
+                    {/* メール */}
                     <label className="text-sm">
                         <span className="block text-gray-600 mb-1">メール</span>
                         <input
@@ -210,6 +207,8 @@ export default function CreateReservationModal({
                             required
                         />
                     </label>
+
+                    {/* 電話番号（任意） */}
                     <label className="text-sm">
                         <span className="block text-gray-600 mb-1">電話番号（任意）</span>
                         <input
@@ -219,59 +218,59 @@ export default function CreateReservationModal({
                             autoComplete="tel"
                             pattern="^[0-9()+\\s\\-]{8,}$"
                             title="数字・() + - と空白のみ、8文字以上"
+                            className="w-full rounded-lg border px-3 py-1.5"
+                            value={draft.phone ?? ""}
+                            onChange={(e) => setDraft((d) => ({ ...d, phone: e.target.value }))}
                         />
-
-
                     </label>
 
-                    {/* その他 */}
-                    <label className="text-sm sm:col-span-2">
+                    {/* 手帳の種別 */}
+                    <label className="text-sm">
                         <span className="block text-gray-600 mb-1">手帳の種別（notebook_type）</span>
                         <textarea
                             className="w-full rounded-lg border px-3 py-1.5"
-                            rows={3}
-                            value={draft.notebook_type ?? ""} required
+                            rows={1}
+                            value={draft.notebook_type ?? ""}
                             onChange={(e) => setDraft((d) => ({ ...d, notebook_type: e.target.value }))}
                         />
                     </label>
 
-                    <div className="sm:col-span-2 flex items-center justify-between gap-3 pt-2">
-                        {/* 受給者証（ラジオ：必須で「あり/なし」どちらか） */}
-                        <fieldset className="sm:col-span-2">
-                            <legend className="block text-gray-600 mb-1 text-sm">受給者証の有無</legend>
-                            <div className="flex items-center gap-6">
-                                <label className="inline-flex items-center gap-2 text-sm">
-                                    <input
-                                        type="radio"
-                                        name="has_certificate"
-                                        value="yes"
-                                        checked={draft.has_certificate === true}
-                                        onChange={() => setDraft((d) => ({ ...d, has_certificate: true }))}
-                                        required
-                                    />
-                                    あり
-                                </label>
-                                <label className="inline-flex items-center gap-2 text-sm">
-                                    <input
-                                        type="radio"
-                                        name="has_certificate"
-                                        value="no"
-                                        checked={draft.has_certificate === false}
-                                        onChange={() => setDraft((d) => ({ ...d, has_certificate: false }))}
-                                    />
-                                    なし
-                                </label>
-                            </div>
-                        </fieldset>
-
-                        <div className="flex gap-2">
-                            <button type="button" onClick={onClose} className="px-4 py-1.5 rounded-xl border hover:bg-gray-50">
-                                キャンセル
-                            </button>
-                            <button type="submit" className="px-4 py-1.5 rounded-xl bg-black text-white hover:opacity-90">
-                                作成
-                            </button>
+                    {/* 受給者証の有無（あり／なし） */}
+                    <fieldset>
+                        <legend className="block text-gray-600 mb-1 text-sm">受給者証の有無</legend>
+                        <div className="flex items-center gap-6">
+                            <label className="inline-flex items-center gap-2 text-sm">
+                                <input
+                                    type="radio"
+                                    name="has_certificate"
+                                    value="yes"
+                                    checked={draft.has_certificate === true}
+                                    onChange={() => setDraft((d) => ({ ...d, has_certificate: true }))}
+                                    required
+                                />
+                                あり
+                            </label>
+                            <label className="inline-flex items-center gap-2 text-sm">
+                                <input
+                                    type="radio"
+                                    name="has_certificate"
+                                    value="no"
+                                    checked={draft.has_certificate === false}
+                                    onChange={() => setDraft((d) => ({ ...d, has_certificate: false }))}
+                                />
+                                なし
+                            </label>
                         </div>
+                    </fieldset>
+
+                    {/* アクション */}
+                    <div className="flex gap-2 pt-2">
+                        <button type="button" onClick={onClose} className="px-4 py-1.5 rounded-xl border hover:bg-gray-50">
+                            キャンセル
+                        </button>
+                        <button type="submit" className="px-4 py-1.5 rounded-xl bg-black text-white hover:opacity-90">
+                            作成
+                        </button>
                     </div>
                 </form>
             </div>
