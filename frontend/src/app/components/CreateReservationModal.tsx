@@ -265,11 +265,11 @@ export default function CreateReservationModal({
 
                     {/* アクション */}
                     <div className="flex gap-2 pt-2">
-                        <button type="button" onClick={onClose} className="px-4 py-1.5 rounded-xl border hover:bg-gray-50">
+                        <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-xl border hover:bg-gray-50 shrink-0">
                             キャンセル
                         </button>
-                        <button type="submit" className="px-4 py-1.5 rounded-xl bg-black text-white hover:opacity-90">
-                            作成
+                        <button type="submit" className="px-5 py-1.5 rounded-xl bg-black text-white  text-base hover:opacity-90">
+                                送 信
                         </button>
                     </div>
                 </form>
