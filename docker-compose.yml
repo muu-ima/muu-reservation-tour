@@ -3,26 +3,35 @@ version: "3.8"
 services:
   backend:
     build:
-      context: ./backend   # LaravelのDockerfileがあるディレクトリ
+      context: ./backend
     container_name: laravel-backend
     ports:
-      - "8081:80"       # Laravelのポート（例）
+      - "8081:80"
     volumes:
-      - ./backend:/var/www/html
+      - ./backend:/var/www/html           # ← :ro を外す（RW）
     environment:
       - APP_ENV=local
       - APP_DEBUG=true
+      - WEBROOT=/var/www/html/public
+      - PHP_ERRORS_STDERR=1
+      - LOG_STDOUT=1
+      # ↓ 必要なら初期処理を抑制（このイメージがサポート）
+      - SKIP_CHOWN=1
+      - SKIP_COMPOSER=1
     depends_on:
       - db
 
   frontend:
     build:
-      context: ./frontend  # Next.jsのDockerfileがあるディレクトリ
+      context: ./frontend
     container_name: next-frontend
     ports:
       - "3000:3000"
+    user: "${UID}:${GID}"
     volumes:
       - ./frontend:/app
+      # node_modules はコンテナ側に隔離して所有権事故を防ぐ
+      - /app/node_modules
     environment:
       - NODE_ENV=development
     command: npm run dev
