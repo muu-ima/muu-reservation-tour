@@ -51,58 +51,52 @@ class ReservationController extends Controller
             // return response()->json($r, 201, $this->cors($request), $this->jsonFlags);
             // 0) 軽い正規化
 
-            if ($request->filled('phone')) {
-                $request->merge(['phone' => mb_convert_kana($request->input('phone'), 'as')]);
-            }
-            foreach (['name', 'last_name', 'first_name', 'email', 'phone', 'contact', 'notebook_type', 'note'] as $k) {
-                if ($request->filled($k) && is_string($request->$k)) {
-                    $request->merge([$k => trim($request->$k)]);
-                }
-            }
+         // --- 正規化（任意） ---
+    if ($request->filled('phone')) {
+        $request->merge(['phone' => mb_convert_kana($request->input('phone'), 'as')]);
+    }
+    foreach (['name', 'last_name', 'first_name', 'email', 'phone', 'contact', 'notebook_type', 'note'] as $k) {
+        if ($request->filled($k) && is_string($request->$k)) {
+            $request->merge([$k => trim($request->$k)]);
+        }
+    }
 
-            // 1) 厳格バリデーション（422）
-            $data = $request->validate([
-                'date' => ['required', 'date_format:Y-m-d'], // ← YYYY-MM-DD を強制
-                'program' => ['required', \Illuminate\Validation\Rule::in(['tour', 'experience'])],
-                'slot' => ['required', \Illuminate\Validation\Rule::in(['am', 'pm', 'full'])],
-                'status' => ['nullable', \Illuminate\Validation\Rule::in(['booked', 'done', 'cancelled'])],
-                'name' => ['nullable', 'string', 'max:191'],
-                'last_name' => ['nullable', 'string', 'max:191'],
-                'first_name' => ['nullable', 'string', 'max:191'],
-                'email' => ['nullable', 'email', 'max:191'],
-                'phone' => ['nullable', 'string', 'max:32', 'regex:/^[0-9()+\s-]{8,}$/u'],
-                'contact' => ['nullable', 'string', 'max:191'],
-                'notebook_type' => ['nullable', 'string', 'max:32'],
-                'has_certificate' => ['nullable', 'boolean'],
-                'note' => ['nullable', 'string', 'max:2000'],
-            ], [
-                'date.date_format' => 'date は YYYY-MM-DD 形式で送ってください。',
-                'phone.regex' => '電話番号は数字、+、( )、-、スペースのみ／8文字以上にしてください。',
-            ]);
+ // --- バリデーション ---
+      $data = $request->validate([
+        'date'    => ['required','date_format:Y-m-d'],
+        'program' => ['required', \Illuminate\Validation\Rule::in(['tour','experience'])],
+        'slot'    => ['required', \Illuminate\Validation\Rule::in(['am','pm','full'])],
+        'status'  => ['nullable', \Illuminate\Validation\Rule::in(['booked','done','cancelled'])],
+        'last_name' => ['nullable','string','max:191'],
+        'first_name'=> ['nullable','string','max:191'],
+        'email'     => ['nullable','email','max:191'],
+        'phone'     => ['nullable','string','max:32','regex:/^[0-9()+\s-]{8,}$/u'],
+        'contact'   => ['nullable','string','max:191'],
+        'notebook_type'=>['nullable','string','max:32'],
+        'has_certificate'=>['nullable','boolean'],
+        'note'      => ['nullable','string','max:2000'],
+    ]);
 
-            // 2) 業務ルール（422）
-            if (($data['program'] ?? null) === 'tour' && ($data['slot'] ?? null) === 'full') {
-                return response()->json(['message' => 'tour は full を選べません'], 422, $this->cors($request), $this->jsonFlags);
-            }
+         // --- 業務ルール ---
+    if (($data['program'] ?? null) === 'tour' && ($data['slot'] ?? null) === 'full') {
+        return response()->json(['message'=>'tour の full は許可されていません'],422,$this->cors($request),$this->jsonFlags);
+    }
 
-            // 3) 既定値 & name フォールバック
-            $data['status'] = $data['status'] ?? 'booked';
-            $data['has_certificate'] = (bool) ($data['has_certificate'] ?? false);
-            $data['name'] = $this->buildFallbackName($data);
+    // --- デフォルト値 ---
+    $data['status'] = $data['status'] ?? 'booked';
+    $data['has_certificate'] = (bool)($data['has_certificate'] ?? false);
+    $data['name'] = $this->buildFallbackName($data);
 
-            // 4) JST日付+slot → UTC start/end
-            [$startAt, $endAt] = $this->calcWindow($data['date'], $data['slot']);
-            $data['start_at'] = $startAt;
-            $data['end_at'] = $endAt;
+   // --- 時間枠計算（JST→UTC） ---
+    [$startAt, $endAt] = $this->calcWindow($data['date'], $data['slot']);
+    $data['start_at'] = $startAt;
+    $data['end_at']   = $endAt;
 
-            // 5) 重複チェック abort(409)
-            $this->assertNoProgramOverlap($data);
-
-            // 6) 作成
-            $created = Reservation::create($data);
+   // --- 作成（重複チェックはDBトリガに任せる） ---
+    $created = Reservation::create($data);
 
             return response()->json($created->toArray(), 201, $this->cors($request), $this->jsonFlags);
-
+            
         } catch (QueryException $e) {
             if ($this->looksLikeOverlap($e)) {
                 return $this->overlapResponse($request);
