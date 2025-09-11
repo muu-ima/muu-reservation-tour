@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type {
   Reservation,
   Program,
@@ -137,6 +137,8 @@ export default function Page() {
   // モバイル用：期間アンカー（1日 or 15日固定） & フリック検出
   const [mobileAnchor, setMobileAnchor] = useState<Date>(() => startOfMonth(new Date()));
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+  const [touchStartPctY, setTouchStartPctY] = useState<number | null>(null); // 0〜1（コンテナ内の開始位置）
+  const mobileListRef = useRef<HTMLDivElement | null>(null);
 
   // 月が変わったらアンカーをその月の1日に寄せ直す
   useEffect(() => {
@@ -149,8 +151,18 @@ export default function Page() {
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.changedTouches[0];
     setTouchStart({ x: t.clientX, y: t.clientY });
+    // 開始位置（縦）を0〜1で保持：下側 or 上側の“辺り”でのフリックのみ有効にするため
+    const rect = mobileListRef.current?.getBoundingClientRect();
+    if (rect) {
+      const pct = (t.clientY - rect.top) / Math.max(1, rect.height);
+      setTouchStartPctY(Math.min(1, Math.max(0, pct)));
+    } else {
+      setTouchStartPctY(null);
+    }
   };
-  const onTouchEnd = (e: React.TouchEvent) => {
+
+
+ const onTouchEnd = (e: React.TouchEvent) => {
     if (!touchStart) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - touchStart.x;
@@ -161,531 +173,537 @@ export default function Page() {
     const passX = ax >= SWIPE.minX;
     const passY = ay >= SWIPE.minY;
 
-    if (ax > ay * SWIPE.ratio && passX) {
+if (ax > ay * SWIPE.ratio && passX) {
       // —— 横方向：月移動（右=次月 / 左=前月）
       setCalCursor((d) => addMonths(d, dx > 0 ? +1 : -1));
     } else if (ay > ax * SWIPE.ratio && passY) {
       // —— 縦方向：月内ウィンドウ切替（1〜14日 ↔ 15日〜月末）
-      setMobileAnchor(() => {
-        const first = startOfMonth(calCursor);
-        const anchorDay = mobileAnchor.getMonth() === first.getMonth() && mobileAnchor.getFullYear() === first.getFullYear()
-          ? mobileAnchor.getDate()
-          : 1;
-        if (dy > 0) {
-          // 下フリック→後半へ（15日固定）
-          return new Date(first.getFullYear(), first.getMonth(), anchorDay <= 14 ? 15 : 15);
-        } else {
-          // 上フリック→前半へ（1日固定）
-          return new Date(first.getFullYear(), first.getMonth(), anchorDay > 14 ? 1 : 1);
-        }
-      });
+      const first = startOfMonth(calCursor);
+      const inFirstHalf =
+        mobileAnchor.getFullYear() === first.getFullYear() &&
+        mobileAnchor.getMonth() === first.getMonth() &&
+        mobileAnchor.getDate() <= 14;
+      // “14日あたり”のニュアンス
+      const BOTTOM_TH = 0.65; // 下側35%
+      const TOP_TH    = 0.35; // 上側35%
+      const startPct  = touchStartPctY ?? 0.5;
+
+      if (dy > 0 && inFirstHalf && startPct >= BOTTOM_TH) {
+        // 下フリック、前半→後半（15日固定）
+        setMobileAnchor(new Date(first.getFullYear(), first.getMonth(), 15));
+      } else if (dy < 0 && !inFirstHalf && startPct <= TOP_TH) {
+        // 上フリック、後半→前半（1日固定）
+        setMobileAnchor(new Date(first.getFullYear(), first.getMonth(), 1));
+      }
     }
+    // ← 後始末は関数内で
     setTouchStart(null);
+    setTouchStartPctY(null);
   };
 
 
-
-  // ===== Helpers
-  const jstDateTime = (iso?: string) => {
-    if (!iso) return "-";
-    try {
-      const dtf = new Intl.DateTimeFormat("ja-JP", {
-        timeZone: "Asia/Tokyo",
-        dateStyle: "medium",
-        timeStyle: "short",
-      });
-      return dtf.format(new Date(iso));
-    } catch {
-      return iso;
-    }
-  };
-
-  const buildQuery = () => {
-    const params = new URLSearchParams();
-    if (filter.date) params.set("date", filter.date);
-    if (filter.program) params.set("program", filter.program);
-    if (filter.slot) params.set("slot", filter.slot);
-    const qs = params.toString();
-    return qs ? `?${qs}` : "";
-  };
-
-  // ===== API calls
-  const fetchReservations = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/reservations${buildQuery()}` as string, {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`GET /reservations failed: ${res.status}`);
-      const data: Reservation[] = await res.json();
-      setItems(data);
-    } catch (e: unknown) {
-      setError(getErrorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // カレンダー用（全件 or サーバ側で最近分を返す想定）
-  const fetchAllReservations = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/reservations`, {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`GET /reservations failed: ${res.status}`);
-      const data: Reservation[] = await res.json();
-      setAllItems(data);
-    } catch (e: unknown) {
-      console.warn("fetchAllReservations:", getErrorMessage(e));
-    }
-  };
-
-  // 初回ロード
-  useEffect(() => {
-    fetchReservations();
-    fetchAllReservations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // カレンダー: 月が変わるたび再フェッチ
-  useEffect(() => {
-    fetchAllReservations();
-  }, [monthKey]);
-
-  // filter 変更で一覧を再取得
-  useEffect(() => {
-    fetchReservations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter.date, filter.program, filter.slot]);
-
-  // ====== 新規作成（モーダルから呼ぶ）
-  const createReservation = async (payload: ReservationCreatePayload) => {
-    setSubmitting(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      if (!payload.date) throw new Error("日付を入力してください");
-
-      const composedName =
-        (payload.name && payload.name.trim()) ||
-        `${payload.last_name ?? ""}${payload.first_name ? ` ${payload.first_name}` : ""}`.trim() ||
-        "ゲスト";
-
-      const body = { ...payload, name: composedName };
-
-      const res = await fetch(`${API_BASE}/reservations`, {
-        method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (res.status === 409) {
-        const js = await res.json().catch(() => ({}));
-        throw new Error(js.message || "その時間帯は埋まっています");
-      }
-      if (!res.ok) {
-        const js = await res.json().catch(() => ({}));
-        throw new Error(js.message || `予約の作成に失敗しました（${res.status}）`);
-      }
-
-      const created: Reservation = await res.json();
-      setSuccess("予約を作成しました");
-      setItems((prev) => (prev ? [created, ...prev] : [created]));
-      setAllItems((prev) => (prev ? [created, ...prev] : [created]));
-      setFilter((f) => ({ ...f, date: toDateStr(created.date ?? payload.date) }));
-      setIsCreateOpen(false);
-    } catch (e: unknown) {
-      setError(getErrorMessage(e));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const updateStatus = async (id: number, status: Status) => {
-    setError(null);
-    setSuccess(null);
-    try {
-      const res = await fetch(`${API_BASE}/reservations/${id}`, {
-        method: "PATCH",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (res.status === 409) {
-        const js = await res.json().catch(() => ({}));
-        throw new Error(js.message || "その時間帯は埋まっています");
-      }
-      if (!res.ok) {
-        const js = await res.json().catch(() => ({}));
-        throw new Error(js.message || `更新に失敗しました（${res.status}）`);
-      }
-      const updated: Reservation = await res.json();
-      setItems((prev) => prev?.map((r) => (r.id === id ? updated : r)) ?? null);
-      setAllItems((prev) => prev?.map((r) => (r.id === id ? updated : r)) ?? null);
-      setSuccess("状態を更新しました");
-    } catch (e: unknown) {
-      setError(getErrorMessage(e));
-    }
-  };
-
-  const deleteReservation = async (id: number) => {
-    if (!confirm("この予約を削除しますか？")) return;
-    setError(null);
-    setSuccess(null);
-    try {
-      const res = await fetch(`${API_BASE}/reservations/${id}`, {
-        method: "DELETE",
-        headers: { Accept: "application/json" },
-      });
-      if (!res.ok) {
-        const js = await res.json().catch(() => ({}));
-        throw new Error(js.message || `削除に失敗しました（${res.status}）`);
-      }
-      setItems((prev) => prev?.filter((r) => r.id !== id) ?? null);
-      setAllItems((prev) => prev?.filter((r) => r.id !== id) ?? null);
-      setSuccess("削除しました");
-    } catch (e: unknown) {
-      setError(getErrorMessage(e));
-    }
-  };
-
-  // ===== カレンダー用: 当月の予約を日付ごとに集計（体験/見学の切替反映）
-  const dayMap = useMemo(() => {
-    const map: Record<string, Reservation[]> = {};
-    (allItems ?? []).forEach((r) => {
-      if (r.program !== calProgram) return;
-      const ds = toDateStr(r.date);
-      if (ds.startsWith(monthKey)) {
-        (map[ds] ||= []).push(r);
-      }
+// ===== Helpers
+const jstDateTime = (iso?: string) => {
+  if (!iso) return "-";
+  try {
+    const dtf = new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      dateStyle: "medium",
+      timeStyle: "short",
     });
-    return map;
-  }, [allItems, monthKey, calProgram]);
+    return dtf.format(new Date(iso));
+  } catch {
+    return iso;
+  }
+};
 
-  // ===== UI
-  return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <header className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl md:text-3xl font-semibold">Reservations Admin</h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={fetchReservations}
-              className="px-4 py-2 rounded-2xl shadow bg-white hover:bg-gray-100 disabled:opacity-50"
-              disabled={loading}
-            >
-              {loading ? "更新中…" : "更新"}
-            </button>
-            <button
-              onClick={() => openCreate()}
-              className="px-4 py-2 rounded-2xl shadow bg-black text-white hover:opacity-90"
-            >
-              ＋ 新規予約
-            </button>
-          </div>
-        </header>
+const buildQuery = () => {
+  const params = new URLSearchParams();
+  if (filter.date) params.set("date", filter.date);
+  if (filter.program) params.set("program", filter.program);
+  if (filter.slot) params.set("slot", filter.slot);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+};
 
-        {(error || success) && (
-          <div className="space-y-2">
-            {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
-            )}
-            {success && (
-              <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">{success}</div>
-            )}
-          </div>
-        )}
+// ===== API calls
+const fetchReservations = async () => {
+  setLoading(true);
+  setError(null);
+  try {
+    const res = await fetch(`${API_BASE}/reservations${buildQuery()}` as string, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`GET /reservations failed: ${res.status}`);
+    const data: Reservation[] = await res.json();
+    setItems(data);
+  } catch (e: unknown) {
+    setError(getErrorMessage(e));
+  } finally {
+    setLoading(false);
+  }
+};
 
-        {/* ===== カレンダー表示 ===== */}
-        <section className="rounded-2xl bg-white shadow p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-wrap">
-              <button
-                className="px-3 py-1 rounded-xl border hover:bg-gray-50"
-                onClick={() => setCalCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-                aria-label="前の月"
-              >
-                ←
-              </button>
-              <span className="min-w-[10ch] text-center text-sm text-gray-700">{formatMonthJP(calCursor)}</span>
-              <button
-                className="px-3 py-1 rounded-xl border hover:bg-gray-50"
-                onClick={() => setCalCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-                aria-label="次の月"
-              >
-                →
-              </button>
-              <button
-                className="px-3 py-1 rounded-xl border hover:bg-gray-50"
-                onClick={() => {
-                  const t = new Date();
-                  t.setDate(1);
-                  setCalCursor(t);
-                }}
-              >
-                今月
-              </button>
-              {/* 体験 / 見学 タブ（アニメ付き） */}
-              <div className="ml-2">
-                <div className="relative inline-flex p-1 rounded-2xl bg-gray-100">
-                  <AnimatePresence initial={false}>
-                    <motion.span
-                      key={calProgram}
-                      layoutId="program-pill"
-                      className="absolute top-1 bottom-1 rounded-xl bg-white shadow"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ type: "spring", stiffness: 420, damping: 36, mass: 0.6 }}
-                      style={{
-                        left: calProgram === "experience" ? 4 : 64, // 64px ≒ ボタン幅に合わせて調整
-                        right: calProgram === "experience" ? 64 : 4,
-                      }}
-                    />
-                  </AnimatePresence>
+// カレンダー用（全件 or サーバ側で最近分を返す想定）
+const fetchAllReservations = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/reservations`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`GET /reservations failed: ${res.status}`);
+    const data: Reservation[] = await res.json();
+    setAllItems(data);
+  } catch (e: unknown) {
+    console.warn("fetchAllReservations:", getErrorMessage(e));
+  }
+};
 
-                  {(["experience", "tour"] as const).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setCalProgram(p)}
-                      aria-pressed={calProgram === p}
-                      className={[
-                        "relative z-10 px-4 py-1.5 text-sm rounded-xl transition",
-                        calProgram === p ? "text-gray-900" : "text-gray-500 hover:text-gray-700"
-                      ].join(" ")}
-                    >
-                      {p === "experience" ? "体験" : "見学"}
-                    </button>
-                  ))}
-                </div>
-              </div>
+// 初回ロード
+useEffect(() => {
+  fetchReservations();
+  fetchAllReservations();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
-            </div>
-          </div>
+// カレンダー: 月が変わるたび再フェッチ
+useEffect(() => {
+  fetchAllReservations();
+}, [monthKey]);
 
-          {/* 曜日ヘッダー — PC/タブレットのみ */}
-          <div className="hidden md:grid grid-cols-7 text-xs text-gray-500">
-            {["月", "火", "水", "木", "金", "土", "日"].map((w) => (
-              <div key={w} className="p-2 text-center font-medium">{w}</div>
-            ))}
-          </div>
+// filter 変更で一覧を再取得
+useEffect(() => {
+  fetchReservations();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [filter.date, filter.program, filter.slot]);
 
-          {/* 月グリッド — PC/タブレットのみ */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={formatMonthJP(calCursor) + "_" + calProgram}
-              className="hidden md:grid grid-cols-7 gap-1"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-            >
-              {monthCells.map((cell, i) => {
-                const dayItems = dayMap[cell.dateStr] ?? [];
-                const counts = dayItems.reduce<SlotCounts>(
-                  (acc, r) => ({ ...acc, [r.slot]: (acc[r.slot] ?? 0) + 1 }),
-                  { am: 0, pm: 0, full: 0 }
-                );
-                const total = dayItems.length;
-                const isToday = cell.dateStr === toDateStr(new Date());
-                const isWeekendCell = isWeekendStr(cell.dateStr);
+// ====== 新規作成（モーダルから呼ぶ）
+const createReservation = async (payload: ReservationCreatePayload) => {
+  setSubmitting(true);
+  setError(null);
+  setSuccess(null);
+  try {
+    if (!payload.date) throw new Error("日付を入力してください");
 
-                const handleTap = () => {
-                  if (!isWeekendCell) {
-                    // 直接「新規作成モーダル」を開く（これが“タップで予約”）
-                    openCreate(cell.dateStr);
-                  } else {
-                    // 休業日は一覧へ（好みで変えてOK）
-                    setFilter((f) => ({ ...f, date: cell.dateStr, program: calProgram }));
-                  }
-                };
+    const composedName =
+      (payload.name && payload.name.trim()) ||
+      `${payload.last_name ?? ""}${payload.first_name ? ` ${payload.first_name}` : ""}`.trim() ||
+      "ゲスト";
 
-                return (
-                  <motion.button
-                    key={cell.dateStr}
-                    type="button"
-                    onClick={handleTap}
-                    className={[
-                      "relative h-24 rounded-xl border p-2 text-left transition",
-                      cell.inMonth ? "bg-white" : "bg-gray-50",
-                      isToday ? "ring-2 ring-blue-500" : "hover:shadow-sm"
-                    ].join(" ")}
-                    whileTap={{ scale: 0.98 }}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.15, delay: Math.min(i * 0.0025, 0.12) }}
-                    title={`${cell.dateStr}の操作`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={"text-sm " + (cell.inMonth ? "text-gray-900" : "text-gray-400")}>
-                        {cell.day}
-                      </span>
-                      {total > 0 && (
-                        <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">{total}</span>
-                      )}
-                    </div>
+    const body = { ...payload, name: composedName };
 
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {counts.full > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">FULL×{counts.full}</span>}
-                      {counts.am > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">AM×{counts.am}</span>}
-                      {counts.pm > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">PM×{counts.pm}</span>}
-                    </div>
+    const res = await fetch(`${API_BASE}/reservations`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
-                    {dayItems[0] && (
-                      <div className="mt-1 text-[11px] text-gray-500 truncate" aria-hidden>
-                        {(dayItems[0].last_name ?? "") + (dayItems[0].first_name ? ` ${dayItems[0].first_name}` : "")}
-                        {dayItems.length > 1 ? ` 他${dayItems.length - 1}件` : ""}
-                      </div>
-                    )}
+    if (res.status === 409) {
+      const js = await res.json().catch(() => ({}));
+      throw new Error(js.message || "その時間帯は埋まっています");
+    }
+    if (!res.ok) {
+      const js = await res.json().catch(() => ({}));
+      throw new Error(js.message || `予約の作成に失敗しました（${res.status}）`);
+    }
 
-                    {/* 右下の“＋/休”は見た目のヒントに留める */}
-                    {!isWeekendCell ? (
-                      <span
-                        className="pointer-events-none absolute right-1 bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs bg-white"
-                        aria-hidden
-                      >＋</span>
-                    ) : (
-                      <span
-                        className="pointer-events-none absolute right-1 bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs text-gray-400 bg-gray-50"
-                        aria-hidden
-                      >休</span>
-                    )}
-                  </motion.button>
-                );
-              })}
-            </motion.div>
-          </AnimatePresence>
+    const created: Reservation = await res.json();
+    setSuccess("予約を作成しました");
+    setItems((prev) => (prev ? [created, ...prev] : [created]));
+    setAllItems((prev) => (prev ? [created, ...prev] : [created]));
+    setFilter((f) => ({ ...f, date: toDateStr(created.date ?? payload.date) }));
+    setIsCreateOpen(false);
+  } catch (e: unknown) {
+    setError(getErrorMessage(e));
+  } finally {
+    setSubmitting(false);
+  }
+};
 
+const updateStatus = async (id: number, status: Status) => {
+  setError(null);
+  setSuccess(null);
+  try {
+    const res = await fetch(`${API_BASE}/reservations/${id}`, {
+      method: "PATCH",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.status === 409) {
+      const js = await res.json().catch(() => ({}));
+      throw new Error(js.message || "その時間帯は埋まっています");
+    }
+    if (!res.ok) {
+      const js = await res.json().catch(() => ({}));
+      throw new Error(js.message || `更新に失敗しました（${res.status}）`);
+    }
+    const updated: Reservation = await res.json();
+    setItems((prev) => prev?.map((r) => (r.id === id ? updated : r)) ?? null);
+    setAllItems((prev) => prev?.map((r) => (r.id === id ? updated : r)) ?? null);
+    setSuccess("状態を更新しました");
+  } catch (e: unknown) {
+    setError(getErrorMessage(e));
+  }
+};
 
-          {/* ▼ モバイル用アジェンダ表示（スマホのみ, 週ビュー＋フリック） */}
-          <div
-            className="md:hidden -mx-2"
-            onTouchStart={onTouchStart}
-            onTouchEnd={onTouchEnd}
+const deleteReservation = async (id: number) => {
+  if (!confirm("この予約を削除しますか？")) return;
+  setError(null);
+  setSuccess(null);
+  try {
+    const res = await fetch(`${API_BASE}/reservations/${id}`, {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) {
+      const js = await res.json().catch(() => ({}));
+      throw new Error(js.message || `削除に失敗しました（${res.status}）`);
+    }
+    setItems((prev) => prev?.filter((r) => r.id !== id) ?? null);
+    setAllItems((prev) => prev?.filter((r) => r.id !== id) ?? null);
+    setSuccess("削除しました");
+  } catch (e: unknown) {
+    setError(getErrorMessage(e));
+  }
+};
+
+// ===== カレンダー用: 当月の予約を日付ごとに集計（体験/見学の切替反映）
+const dayMap = useMemo(() => {
+  const map: Record<string, Reservation[]> = {};
+  (allItems ?? []).forEach((r) => {
+    if (r.program !== calProgram) return;
+    const ds = toDateStr(r.date);
+    if (ds.startsWith(monthKey)) {
+      (map[ds] ||= []).push(r);
+    }
+  });
+  return map;
+}, [allItems, monthKey, calProgram]);
+
+// ===== UI
+return (
+  <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
+    <div className="mx-auto max-w-7xl space-y-6">
+      <header className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl md:text-3xl font-semibold">Reservations Admin</h1>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchReservations}
+            className="px-4 py-2 rounded-2xl shadow bg-white hover:bg-gray-100 disabled:opacity-50"
+            disabled={loading}
           >
-            {/* ヘッダー */}
-            <div className="flex items-center justify-between px-2 pb-2">
-              <span className="text-sm text-gray-600">
-                {new Date(calCursor).getFullYear()}年 {new Date(calCursor).getMonth() + 1}月・モバイル表示
-              </span>
-              <span className="text-[11px] text-gray-400">横:月 / 縦:月内切替</span>
+            {loading ? "更新中…" : "更新"}
+          </button>
+          <button
+            onClick={() => openCreate()}
+            className="px-4 py-2 rounded-2xl shadow bg-black text-white hover:opacity-90"
+          >
+            ＋ 新規予約
+          </button>
+        </div>
+      </header>
+
+      {(error || success) && (
+        <div className="space-y-2">
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
+          )}
+          {success && (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">{success}</div>
+          )}
+        </div>
+      )}
+
+      {/* ===== カレンダー表示 ===== */}
+      <section className="rounded-2xl bg-white shadow p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              className="px-3 py-1 rounded-xl border hover:bg-gray-50"
+              onClick={() => setCalCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+              aria-label="前の月"
+            >
+              ←
+            </button>
+            <span className="min-w-[10ch] text-center text-sm text-gray-700">{formatMonthJP(calCursor)}</span>
+            <button
+              className="px-3 py-1 rounded-xl border hover:bg-gray-50"
+              onClick={() => setCalCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+              aria-label="次の月"
+            >
+              →
+            </button>
+            <button
+              className="px-3 py-1 rounded-xl border hover:bg-gray-50"
+              onClick={() => {
+                const t = new Date();
+                t.setDate(1);
+                setCalCursor(t);
+              }}
+            >
+              今月
+            </button>
+            {/* 体験 / 見学 タブ（アニメ付き） */}
+            <div className="ml-2">
+              <div className="relative inline-flex p-1 rounded-2xl bg-gray-100">
+                <AnimatePresence initial={false}>
+                  <motion.span
+                    key={calProgram}
+                    layoutId="program-pill"
+                    className="absolute top-1 bottom-1 rounded-xl bg-white shadow"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 420, damping: 36, mass: 0.6 }}
+                    style={{
+                      left: calProgram === "experience" ? 4 : 64, // 64px ≒ ボタン幅に合わせて調整
+                      right: calProgram === "experience" ? 64 : 4,
+                    }}
+                  />
+                </AnimatePresence>
+
+                {(["experience", "tour"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setCalProgram(p)}
+                    aria-pressed={calProgram === p}
+                    className={[
+                      "relative z-10 px-4 py-1.5 text-sm rounded-xl transition",
+                      calProgram === p ? "text-gray-900" : "text-gray-500 hover:text-gray-700"
+                    ].join(" ")}
+                  >
+                    {p === "experience" ? "体験" : "見学"}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {(() => {
-              // 表示窓：前半(1〜14)は14日固定、後半(15〜月末)は残り全部
-              const first = startOfMonth(calCursor);
-              const dim = daysInMonth(calCursor);
-              const anchorDay = mobileAnchor.getDate();
-              const length = anchorDay <= 14 ? MOBILE_WINDOW_DAYS : (dim - 14);
-              const windowCells = Array.from({ length }, (_, i) => {
-                const d = addDays(new Date(first.getFullYear(), first.getMonth(), anchorDay), i);
-                const dateStr = toDateStr(d);
-                return { dateStr, day: d.getDate(), dow: d.getDay() };
-              });
+          </div>
+        </div>
+
+        {/* 曜日ヘッダー — PC/タブレットのみ */}
+        <div className="hidden md:grid grid-cols-7 text-xs text-gray-500">
+          {["月", "火", "水", "木", "金", "土", "日"].map((w) => (
+            <div key={w} className="p-2 text-center font-medium">{w}</div>
+          ))}
+        </div>
+
+        {/* 月グリッド — PC/タブレットのみ */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={formatMonthJP(calCursor) + "_" + calProgram}
+            className="hidden md:grid grid-cols-7 gap-1"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            {monthCells.map((cell, i) => {
+              const dayItems = dayMap[cell.dateStr] ?? [];
+              const counts = dayItems.reduce<SlotCounts>(
+                (acc, r) => ({ ...acc, [r.slot]: (acc[r.slot] ?? 0) + 1 }),
+                { am: 0, pm: 0, full: 0 }
+              );
+              const total = dayItems.length;
+              const isToday = cell.dateStr === toDateStr(new Date());
+              const isWeekendCell = isWeekendStr(cell.dateStr);
+
+              const handleTap = () => {
+                if (!isWeekendCell) {
+                  // 直接「新規作成モーダル」を開く（これが“タップで予約”）
+                  openCreate(cell.dateStr);
+                } else {
+                  // 休業日は一覧へ（好みで変えてOK）
+                  setFilter((f) => ({ ...f, date: cell.dateStr, program: calProgram }));
+                }
+              };
 
               return (
-                <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden bg-white">
-                  {windowCells.map((cell) => {
-                    const dayItems = dayMap[cell.dateStr] ?? [];
-                    const counts = dayItems.reduce<Record<Slot, number>>(
-                      (acc, r) => ({ ...acc, [r.slot]: (acc[r.slot] ?? 0) + 1 }),
-                      { am: 0, pm: 0, full: 0 }
-                    );
-                    const total = dayItems.length;
-                    const isToday = cell.dateStr === toDateStr(new Date());
-                    const isWeekendCell = isWeekendStr(cell.dateStr);
-                    const w = ["日", "月", "火", "水", "木", "金", "土"][cell.dow];
+                <motion.button
+                  key={cell.dateStr}
+                  type="button"
+                  onClick={handleTap}
+                  className={[
+                    "relative h-24 rounded-xl border p-2 text-left transition",
+                    cell.inMonth ? "bg-white" : "bg-gray-50",
+                    isToday ? "ring-2 ring-blue-500" : "hover:shadow-sm"
+                  ].join(" ")}
+                  whileTap={{ scale: 0.98 }}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.15, delay: Math.min(i * 0.0025, 0.12) }}
+                  title={`${cell.dateStr}の操作`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={"text-sm " + (cell.inMonth ? "text-gray-900" : "text-gray-400")}>
+                      {cell.day}
+                    </span>
+                    {total > 0 && (
+                      <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">{total}</span>
+                    )}
+                  </div>
 
-                    return (
-                      <li key={cell.dateStr}>
-                        <div
-                          className="flex items-center gap-3 px-3 py-2 active:bg-gray-50"
-                          onClick={() =>
-                            setFilter((f) => ({ ...f, date: cell.dateStr, program: calProgram }))
-                          }
-                          role="button"
-                          tabIndex={0}
-                          title={`${cell.dateStr}の予約を一覧で表示`}
-                        >
-                          {/* 日付バッジ（既存デザインのまま） */}
-                          <div className="w-14 shrink-0 text-center">
-                            <div className={"text-base leading-5 " + (isToday ? "font-semibold text-blue-600" : "text-gray-900")}>
-                              {cell.day}
-                            </div>
-                            <div className={"text-[10px] " + (isWeekendCell ? "text-red-500" : "text-gray-500")}>{w}</div>
-                          </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {counts.full > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">FULL×{counts.full}</span>}
+                    {counts.am > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">AM×{counts.am}</span>}
+                    {counts.pm > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">PM×{counts.pm}</span>}
+                  </div>
 
-                          {/* 件数 / 先頭氏名 */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              {total > 0 && (
-                                <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">{total}件</span>
-                              )}
-                              <div className="flex flex-wrap gap-1">
-                                {counts.full > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">FULL×{counts.full}</span>}
-                                {counts.am > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">AM×{counts.am}</span>}
-                                {counts.pm > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">PM×{counts.pm}</span>}
-                              </div>
-                            </div>
-                            {dayItems[0] && (
-                              <div className="mt-0.5 text-[11px] text-gray-500 truncate" aria-hidden>
-                                {(dayItems[0].last_name ?? "") + (dayItems[0].first_name ? ` ${dayItems[0].first_name}` : "")}
-                                {dayItems.length > 1 ? ` 他${dayItems.length - 1}件` : ""}
-                              </div>
-                            )}
-                          </div>
+                  {dayItems[0] && (
+                    <div className="mt-1 text-[11px] text-gray-500 truncate" aria-hidden>
+                      {(dayItems[0].last_name ?? "") + (dayItems[0].first_name ? ` ${dayItems[0].first_name}` : "")}
+                      {dayItems.length > 1 ? ` 他${dayItems.length - 1}件` : ""}
+                    </div>
+                  )}
 
-                          {/* 右端：＋ / 休（既存ロジック維持） */}
-                          {!isWeekendCell ? (
-                            <button
-                              type="button"
-                              className="h-8 w-8 shrink-0 rounded-full border text-base leading-8 text-center bg-white hover:bg-gray-50"
-                              onClick={(e) => { e.stopPropagation(); openCreate(cell.dateStr); }}
-                              aria-label={`${cell.dateStr} に予約を追加`}
-                              title="この日に予約を追加"
-                            >＋</button>
-                          ) : (
-                            <div
-                              className="h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
-                              aria-disabled="true"
-                              title="土日は休業日のため新規は作成できません"
-                            >休</div>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                  {/* 右下の“＋/休”は見た目のヒントに留める */}
+                  {!isWeekendCell ? (
+                    <span
+                      className="pointer-events-none absolute right-1 bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs bg-white"
+                      aria-hidden
+                    >＋</span>
+                  ) : (
+                    <span
+                      className="pointer-events-none absolute right-1 bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs text-gray-400 bg-gray-50"
+                      aria-hidden
+                    >休</span>
+                  )}
+                </motion.button>
               );
-            })()}
+            })}
+          </motion.div>
+        </AnimatePresence>
 
 
-            <p className="mt-2 text-xs text-gray-500">
-              右/左フリック＝月移動、下/上フリック＝月内の前半/後半切替。日付タップで一覧に反映。
-            </p>
+        {/* ▼ モバイル用アジェンダ表示（スマホのみ, 週ビュー＋フリック） */}
+        <div
+          className="md:hidden -mx-2"
+          ref={mobileListRef}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
+          {/* ヘッダー */}
+          <div className="flex items-center justify-between px-2 pb-2">
+            <span className="text-sm text-gray-600">
+              {new Date(calCursor).getFullYear()}年 {new Date(calCursor).getMonth() + 1}月・モバイル表示
+            </span>
+            <span className="text-[11px] text-gray-400">横:月 / 縦:月内切替</span>
           </div>
 
-          <p className="text-xs text-gray-500">日付タップで一覧に反映。右端「＋」でその日に新規作成。</p>
-        </section>
+          {(() => {
+            // 表示窓：前半(1〜14)は14日固定、後半(15〜月末)は残り全部
+            const first = startOfMonth(calCursor);
+            const dim = daysInMonth(calCursor);
+            const anchorDay = mobileAnchor.getDate();
+            const length = anchorDay <= 14 ? MOBILE_WINDOW_DAYS : (dim - 14);
+            const windowCells = Array.from({ length }, (_, i) => {
+              const d = addDays(new Date(first.getFullYear(), first.getMonth(), anchorDay), i);
+              const dateStr = toDateStr(d);
+              return { dateStr, day: d.getDate(), dow: d.getDay() };
+            });
 
-        {/* ===== 検索/絞り込み（一覧） ===== */}
-        {/* ここに一覧テーブルなどを置く想定（省略） */}
+            return (
+              <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden bg-white">
+                {windowCells.map((cell) => {
+                  const dayItems = dayMap[cell.dateStr] ?? [];
+                  const counts = dayItems.reduce<Record<Slot, number>>(
+                    (acc, r) => ({ ...acc, [r.slot]: (acc[r.slot] ?? 0) + 1 }),
+                    { am: 0, pm: 0, full: 0 }
+                  );
+                  const total = dayItems.length;
+                  const isToday = cell.dateStr === toDateStr(new Date());
+                  const isWeekendCell = isWeekendStr(cell.dateStr);
+                  const w = ["日", "月", "火", "水", "木", "金", "土"][cell.dow];
 
-        <footer className="text-xs text-gray-500 pt-4">API: <code>{API_BASE}</code></footer>
-      </div>
+                  return (
+                    <li key={cell.dateStr}>
+                      <div
+                        className="flex items-center gap-3 px-3 py-2 active:bg-gray-50"
+                        onClick={() =>
+                          setFilter((f) => ({ ...f, date: cell.dateStr, program: calProgram }))
+                        }
+                        role="button"
+                        tabIndex={0}
+                        title={`${cell.dateStr}の予約を一覧で表示`}
+                      >
+                        {/* 日付バッジ（既存デザインのまま） */}
+                        <div className="w-14 shrink-0 text-center">
+                          <div className={"text-base leading-5 " + (isToday ? "font-semibold text-blue-600" : "text-gray-900")}>
+                            {cell.day}
+                          </div>
+                          <div className={"text-[10px] " + (isWeekendCell ? "text-red-500" : "text-gray-500")}>{w}</div>
+                        </div>
 
-      {/* 予約作成モーダル */}
-      <CreateReservationModal
-        open={isCreateOpen}
-        initialDate={createDate}
-        initialSlot={createSlot}
-        // initialProgram={calProgram} // ← モーダルが対応済みなら有効化
-        onClose={() => setIsCreateOpen(false)}
-        onSubmit={createReservation}
-      />
+                        {/* 件数 / 先頭氏名 */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            {total > 0 && (
+                              <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">{total}件</span>
+                            )}
+                            <div className="flex flex-wrap gap-1">
+                              {counts.full > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">FULL×{counts.full}</span>}
+                              {counts.am > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">AM×{counts.am}</span>}
+                              {counts.pm > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">PM×{counts.pm}</span>}
+                            </div>
+                          </div>
+                          {dayItems[0] && (
+                            <div className="mt-0.5 text-[11px] text-gray-500 truncate" aria-hidden>
+                              {(dayItems[0].last_name ?? "") + (dayItems[0].first_name ? ` ${dayItems[0].first_name}` : "")}
+                              {dayItems.length > 1 ? ` 他${dayItems.length - 1}件` : ""}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 右端：＋ / 休（既存ロジック維持） */}
+                        {!isWeekendCell ? (
+                          <button
+                            type="button"
+                            className="h-8 w-8 shrink-0 rounded-full border text-base leading-8 text-center bg-white hover:bg-gray-50"
+                            onClick={(e) => { e.stopPropagation(); openCreate(cell.dateStr); }}
+                            aria-label={`${cell.dateStr} に予約を追加`}
+                            title="この日に予約を追加"
+                          >＋</button>
+                        ) : (
+                          <div
+                            className="h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
+                            aria-disabled="true"
+                            title="土日は休業日のため新規は作成できません"
+                          >休</div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+          })()}
+
+
+          <p className="mt-2 text-xs text-gray-500">
+            右/左フリック＝月移動、下/上フリック＝月内の前半/後半切替。日付タップで一覧に反映。
+          </p>
+        </div>
+
+        <p className="text-xs text-gray-500">日付タップで一覧に反映。右端「＋」でその日に新規作成。</p>
+      </section>
+
+      {/* ===== 検索/絞り込み（一覧） ===== */}
+      {/* ここに一覧テーブルなどを置く想定（省略） */}
+
+      <footer className="text-xs text-gray-500 pt-4">API: <code>{API_BASE}</code></footer>
     </div>
-  );
+
+    {/* 予約作成モーダル */}
+    <CreateReservationModal
+      open={isCreateOpen}
+      initialDate={createDate}
+      initialSlot={createSlot}
+      // initialProgram={calProgram} // ← モーダルが対応済みなら有効化
+      onClose={() => setIsCreateOpen(false)}
+      onSubmit={createReservation}
+    />
+  </div>
+);
 }
