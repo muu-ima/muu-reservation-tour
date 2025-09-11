@@ -458,7 +458,7 @@ export default function Page() {
               </div>
 
               {/* 半月タブ：前半 / 後半 */}
-              <div className="ml-2">
+              <div className="ml-2 md:hidden">
                 <div className="inline-flex p-1 rounded-2xl bg-gray-100">
                   {(["first", "second"] as const).map((h) => (
                     <button
