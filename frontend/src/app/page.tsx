@@ -81,18 +81,19 @@ export default function Page() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  // しきい値パラメータ（好みに合わせて調整）
+
+  // モバイルの半月タブ（前半=1–14 / 後半=15–末）
+  type Half = "first" | "second";
+  const [mobileHalf, setMobileHalf] = useState<Half>("first");
+
+  // フリック関連：横だけ生かす
   const SWIPE = {
     minX: 48,       // 横スワイプの最低距離 px
-    minY: 72,       // 縦スワイプの最低距離 px
-    ratio: 1.75,    // 角度のしきい(横優先: ax > ay*ratio / 縦優先: ay > ax*ratio)
-    fastTime: 180,  // 高速スワイプ判定：経過(ms) 以下なら
-    fastDist: 32,   //   最低距離(px)をこれで救済
+    ratio: 1.5,     // 横優位の角度しきい（ax > ay*ratio）
   };
 
   // 表示窓：前半 1〜14日（14日分）、後半 15日〜月末（残り全部）
   const MOBILE_WINDOW_DAYS = 14; // 前半固定
-
 
   // 絞り込み（一覧用）
   const [filter, setFilter] = useState<ReservationFilterUI>(() => ({
@@ -110,6 +111,7 @@ export default function Page() {
 
   const monthCells = useMemo(() => buildMonthCells(calCursor, true), [calCursor]);
   const monthKey = useMemo(() => toDateStr(calCursor).slice(0, 7), [calCursor]); // YYYY-MM
+
   // カレンダーの表示対象（体験/見学）
   const [calProgram, setCalProgram] = useState<Program>("experience");
 
@@ -134,74 +136,47 @@ export default function Page() {
   const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
   const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, 1);
 
-  // モバイル用：期間アンカー（1日 or 15日固定） & フリック検出
+  // モバイル用：期間アンカー（1日 or 15日固定） & 横フリック検出
   const [mobileAnchor, setMobileAnchor] = useState<Date>(() => startOfMonth(new Date()));
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
-  const lastToggleAt = useRef(0);             // 連続切替え防止
-  const touchStartAt = useRef<number | null>(null);
-  const [touchStartPctY, setTouchStartPctY] = useState<number | null>(null); // 0〜1（コンテナ内の開始位置）
   const mobileListRef = useRef<HTMLDivElement | null>(null);
 
   // 月が変わったらアンカーをその月の1日に寄せ直す
   useEffect(() => {
-    const first = new Date(calCursor);
-    first.setDate(1);
     setMobileAnchor(startOfMonth(new Date(calCursor)));
   }, [calCursor]);
 
-  // フリック（横=月／縦=週）
+  // 半月タブが変わったら、1日 or 15日に寄せる
+  useEffect(() => {
+    const first = startOfMonth(calCursor);
+    const day = mobileHalf === "first" ? 1 : 15;
+    setMobileAnchor(new Date(first.getFullYear(), first.getMonth(), day));
+  }, [calCursor, mobileHalf]);
+
+  // タッチ開始（横判定用）
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.changedTouches[0];
     setTouchStart({ x: t.clientX, y: t.clientY });
-    touchStartAt.current = Date.now();
-
-    const rect = mobileListRef.current?.getBoundingClientRect();
-    if (rect) {
-      const pct = (t.clientY - rect.top) / Math.max(1, rect.height);
-      setTouchStartPctY(Math.min(1, Math.max(0, pct)));
-    } else {
-      setTouchStartPctY(null);
-    }
   };
 
-
-  // onTouchEnd（置換）
+  // タッチ終了（横＝月移動のみ）
   const onTouchEnd = (e: React.TouchEvent) => {
     if (!touchStart) return;
-    const now = Date.now();
     const t = e.changedTouches[0];
-
     const dx = t.clientX - touchStart.x;
     const dy = t.clientY - touchStart.y;
     const ax = Math.abs(dx), ay = Math.abs(dy);
 
-    // 角度・距離しきい（横/縦の基本は既存と同じでOK）
     const isHorizontal = ax > ay * SWIPE.ratio;
-    const isVertical = ay > ax * SWIPE.ratio;
     const passX = ax >= SWIPE.minX;
-    const passY = ay >= SWIPE.minY;
 
     if (isHorizontal && passX) {
       // 横：月移動（右=次 / 左=前）
       setCalCursor((d) => addMonths(d, dx > 0 ? +1 : -1));
-    } else if (isVertical && passY) {
-      // 縦：固定ジャンプ（同じ月の中でのみ移動）
-      const first = startOfMonth(calCursor);
-      if (dy > 0) {
-        // 下フリック → 15日に固定（＝後半ビュー）
-        setMobileAnchor(new Date(first.getFullYear(), first.getMonth(), 15));
-      } else if (dy < 0) {
-        // 上フリック → 1日に固定（＝前半ビュー）
-        setMobileAnchor(new Date(first.getFullYear(), first.getMonth(), 1));
-      }
     }
 
-    // 後始末
     setTouchStart(null);
-    setTouchStartPctY(null);
   };
-
-
 
   // ===== Helpers
   const jstDateTime = (iso?: string) => {
@@ -445,6 +420,7 @@ export default function Page() {
               >
                 今月
               </button>
+
               {/* 体験 / 見学 タブ（アニメ付き） */}
               <div className="ml-2">
                 <div className="relative inline-flex p-1 rounded-2xl bg-gray-100">
@@ -481,6 +457,25 @@ export default function Page() {
                 </div>
               </div>
 
+              {/* 半月タブ：前半 / 後半 */}
+              <div className="ml-2">
+                <div className="inline-flex p-1 rounded-2xl bg-gray-100">
+                  {(["first", "second"] as const).map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => setMobileHalf(h)}
+                      aria-pressed={mobileHalf === h}
+                      className={[
+                        "px-4 py-1.5 text-sm rounded-xl transition",
+                        mobileHalf === h ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+                      ].join(" ")}
+                    >
+                      {h === "first" ? "前半 (1–14)" : "後半 (15–末)"}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -578,7 +573,7 @@ export default function Page() {
           </AnimatePresence>
 
 
-          {/* ▼ モバイル用アジェンダ表示（スマホのみ, 週ビュー＋フリック） */}
+          {/* ▼ モバイル用アジェンダ表示（スマホのみ, 半月ビュー＋横フリックで月移動） */}
           <div
             className="md:hidden -mx-2"
             ref={mobileListRef}
@@ -590,7 +585,7 @@ export default function Page() {
               <span className="text-sm text-gray-600">
                 {new Date(calCursor).getFullYear()}年 {new Date(calCursor).getMonth() + 1}月・モバイル表示
               </span>
-              <span className="text-[11px] text-gray-400">横:月 / 縦:月内切替</span>
+              <span className="text-[11px] text-gray-400">横:月移動 ／ タブ:前半・後半</span>
             </div>
 
             {(() => {
@@ -681,9 +676,8 @@ export default function Page() {
               );
             })()}
 
-
             <p className="mt-2 text-xs text-gray-500">
-              右/左フリック＝月移動、下/上フリック＝月内の前半/後半切替。日付タップで一覧に反映。
+              横フリック＝月移動／タブで「前半・後半」を切り替え。日付タップで一覧に反映。
             </p>
           </div>
 
