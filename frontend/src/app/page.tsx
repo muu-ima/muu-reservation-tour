@@ -169,61 +169,38 @@ export default function Page() {
   const onTouchEnd = (e: React.TouchEvent) => {
     if (!touchStart) return;
     const now = Date.now();
-    const since = now - (touchStartAt.current ?? now);
-
     const t = e.changedTouches[0];
+
     const dx = t.clientX - touchStart.x;
     const dy = t.clientY - touchStart.y;
     const ax = Math.abs(dx), ay = Math.abs(dy);
 
-    // 角度しきい
+    // 角度・距離しきい（横/縦の基本は既存と同じでOK）
     const isHorizontal = ax > ay * SWIPE.ratio;
     const isVertical = ay > ax * SWIPE.ratio;
-
-    // 距離しきい（高速フリック救済）
     const passX = ax >= SWIPE.minX;
-    const passY = ay >= SWIPE.minY || (since <= SWIPE.fastTime && ay >= SWIPE.fastDist);
-
-    // クールダウン（縦切替専用）
-    const COOL = 450;
-    const canToggle = (now - lastToggleAt.current) >= COOL;
+    const passY = ay >= SWIPE.minY;
 
     if (isHorizontal && passX) {
-      // —— 横：月移動（右=次月 / 左=前月）
+      // 横：月移動（右=次 / 左=前）
       setCalCursor((d) => addMonths(d, dx > 0 ? +1 : -1));
-    } else if (isVertical && passY && canToggle) {
-      // —— 縦：前半/後半切替（上下端ゾーン＋終点側も確認）
-      const rect = mobileListRef.current?.getBoundingClientRect();
-      const endPct = rect ? (t.clientY - rect.top) / Math.max(1, rect.height) : 0.5;
-
-      const TOP_ZONE = 0.30;    // 上 30% 以内から開始
-      const BOT_ZONE = 0.70;    // 下 30% 以内から開始
-      const TOP_END = 0.40;    // 終点がここより上なら“上フリック”確定
-      const BOT_END = 0.60;    // 終点がここより下なら“下フリック”確定
-
-      const startPct = touchStartPctY ?? 0.5;
+    } else if (isVertical && passY) {
+      // 縦：固定ジャンプ（同じ月の中でのみ移動）
       const first = startOfMonth(calCursor);
-      const inFirstHalf =
-        mobileAnchor.getFullYear() === first.getFullYear() &&
-        mobileAnchor.getMonth() === first.getMonth() &&
-        mobileAnchor.getDate() <= 14;
-
-      if (dy > 0 && inFirstHalf && startPct >= BOT_ZONE && endPct >= BOT_END) {
-        // 下：前半 → 後半（15日固定）
+      if (dy > 0) {
+        // 下フリック → 15日に固定（＝後半ビュー）
         setMobileAnchor(new Date(first.getFullYear(), first.getMonth(), 15));
-        lastToggleAt.current = now;
-      } else if (dy < 0 && !inFirstHalf && startPct <= TOP_ZONE && endPct <= TOP_END) {
-        // 上：後半 → 前半（1日固定）
+      } else if (dy < 0) {
+        // 上フリック → 1日に固定（＝前半ビュー）
         setMobileAnchor(new Date(first.getFullYear(), first.getMonth(), 1));
-        lastToggleAt.current = now;
       }
     }
 
     // 後始末
     setTouchStart(null);
     setTouchStartPctY(null);
-    touchStartAt.current = null;
   };
+
 
 
   // ===== Helpers
