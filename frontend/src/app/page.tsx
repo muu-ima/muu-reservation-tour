@@ -90,9 +90,8 @@ export default function Page() {
     fastDist: 24,   //   最低距離(px)をこれで救済
   };
 
-  // 表示窓＆移動量（2週間表示＋1週送り）
-  const MOBILE_WINDOW_DAYS = 14;
-  const MOBILE_SHIFT_DAYS = 7;
+  // 表示窓：前半 1〜14日（14日分）、後半 15日〜月末（残り全部）
+  const MOBILE_WINDOW_DAYS = 14; // 前半固定
 
 
   // 絞り込み（一覧用）
@@ -128,26 +127,22 @@ export default function Page() {
     setIsCreateOpen(true);
   }
 
-  // 月曜はじまりの週頭
-  const startOfWeekMon = (d: Date) => {
-    const x = new Date(d);
-    const wd = (x.getDay() + 6) % 7; // Mon=0
-    x.setDate(x.getDate() - wd);
-    x.setHours(0, 0, 0, 0);
-    return x;
-  };
+  // 月境界ユーティリティ
+  const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
+  const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  const daysInMonth = (d: Date) => endOfMonth(d).getDate();
   const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
   const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, 1);
 
-  // モバイル用：週アンカー & フリック検出
-  const [mobileAnchor, setMobileAnchor] = useState<Date>(() => startOfWeekMon(new Date()));
+  // モバイル用：期間アンカー（1日 or 15日固定） & フリック検出
+  const [mobileAnchor, setMobileAnchor] = useState<Date>(() => startOfMonth(new Date()));
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
 
-  // 月が変わったらアンカーをその月の最初の週へ寄せ直し（calCursor がある前提）
+  // 月が変わったらアンカーをその月の1日に寄せ直す
   useEffect(() => {
     const first = new Date(calCursor);
     first.setDate(1);
-    setMobileAnchor(startOfWeekMon(first));
+    setMobileAnchor(startOfMonth(new Date(calCursor)));
   }, [calCursor]);
 
   // フリック（横=月／縦=週）
@@ -170,8 +165,20 @@ export default function Page() {
       // —— 横方向：月移動（右=次月 / 左=前月）
       setCalCursor((d) => addMonths(d, dx > 0 ? +1 : -1));
     } else if (ay > ax * SWIPE.ratio && passY) {
-      // —— 縦方向：週移動（下=+1週 / 上=-1週）
-      setMobileAnchor((a) => addDays(a, dy > 0 ? +MOBILE_SHIFT_DAYS : -MOBILE_SHIFT_DAYS));
+      // —— 縦方向：月内ウィンドウ切替（1〜14日 ↔ 15日〜月末）
+      setMobileAnchor(() => {
+        const first = startOfMonth(calCursor);
+        const anchorDay = mobileAnchor.getMonth() === first.getMonth() && mobileAnchor.getFullYear() === first.getFullYear()
+          ? mobileAnchor.getDate()
+          : 1;
+        if (dy > 0) {
+          // 下フリック→後半へ（15日固定）
+          return new Date(first.getFullYear(), first.getMonth(), anchorDay <= 14 ? 15 : 15);
+        } else {
+          // 上フリック→前半へ（1日固定）
+          return new Date(first.getFullYear(), first.getMonth(), anchorDay > 14 ? 1 : 1);
+        }
+      });
     }
     setTouchStart(null);
   };
@@ -562,15 +569,19 @@ export default function Page() {
             {/* ヘッダー */}
             <div className="flex items-center justify-between px-2 pb-2">
               <span className="text-sm text-gray-600">
-                {new Date(calCursor).getFullYear()}年 {new Date(calCursor).getMonth() + 1}月・週表示
+                {new Date(calCursor).getFullYear()}年 {new Date(calCursor).getMonth() + 1}月・モバイル表示
               </span>
-              <span className="text-[11px] text-gray-400">横:月 / 縦:週</span>
+              <span className="text-[11px] text-gray-400">横:月 / 縦:月内切替</span>
             </div>
 
             {(() => {
-              // 表示窓：MOBILE_WINDOW_DAYS 日分（例: 14日＝2週間）
-              const windowCells = Array.from({ length: MOBILE_WINDOW_DAYS }, (_, i) => {
-                const d = addDays(mobileAnchor, i);
+              // 表示窓：前半(1〜14)は14日固定、後半(15〜月末)は残り全部
+              const first = startOfMonth(calCursor);
+              const dim = daysInMonth(calCursor);
+              const anchorDay = mobileAnchor.getDate();
+              const length = anchorDay <= 14 ? MOBILE_WINDOW_DAYS : (dim - 14);
+              const windowCells = Array.from({ length }, (_, i) => {
+                const d = addDays(new Date(first.getFullYear(), first.getMonth(), anchorDay), i);
                 const dateStr = toDateStr(d);
                 return { dateStr, day: d.getDate(), dow: d.getDay() };
               });
@@ -653,7 +664,7 @@ export default function Page() {
 
 
             <p className="mt-2 text-xs text-gray-500">
-              右/左フリック＝月移動、下/上フリック＝1週送り。日付タップで一覧に反映。
+              右/左フリック＝月移動、下/上フリック＝月内の前半/後半切替。日付タップで一覧に反映。
             </p>
           </div>
 
