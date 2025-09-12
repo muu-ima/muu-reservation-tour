@@ -12,6 +12,7 @@ import type {
 import { isProgram, isSlot, getErrorMessage } from "@/types/reservation";
 import CreateReservationModal from "@/components/CreateReservationModal";
 import { motion, AnimatePresence } from "framer-motion"
+import ChatIcon from "./components/ChatIcon";
 
 // ============================================
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
@@ -699,6 +700,7 @@ export default function Page() {
         onClose={() => setIsCreateOpen(false)}
         onSubmit={createReservation}
       />
+      <ChatIcon />
     </div>
   );
 }
