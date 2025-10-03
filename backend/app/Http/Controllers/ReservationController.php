@@ -10,6 +10,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Illuminate\Support\Facades\Log;
 
 class ReservationController extends Controller
 {
@@ -43,7 +45,7 @@ class ReservationController extends Controller
     public function store(\Illuminate\Http\Request $request)
     {
         try {
-            \Log::info('req', $request->all()); // 受け取りログ
+            Log::info('req', $request->all()); // 受け取りログ
 
             // 既存のバリデーション＆保存ロジック
             // $validated = validator(...)->validate();
@@ -51,52 +53,60 @@ class ReservationController extends Controller
             // return response()->json($r, 201, $this->cors($request), $this->jsonFlags);
             // 0) 軽い正規化
 
-         // --- 正規化（任意） ---
-    if ($request->filled('phone')) {
-        $request->merge(['phone' => mb_convert_kana($request->input('phone'), 'as')]);
-    }
-    foreach (['name', 'last_name', 'first_name', 'email', 'phone', 'contact', 'notebook_type', 'note'] as $k) {
-        if ($request->filled($k) && is_string($request->$k)) {
-            $request->merge([$k => trim($request->$k)]);
-        }
-    }
+            // --- 正規化（任意） ---
+            if ($request->filled('phone')) {
+                $request->merge(['phone' => mb_convert_kana($request->input('phone'), 'as')]);
+            }
+            foreach (['name', 'last_name', 'first_name', 'email', 'phone', 'contact', 'notebook_type', 'note'] as $k) {
+                if ($request->filled($k) && is_string($request->$k)) {
+                    $request->merge([$k => trim($request->$k)]);
+                }
+            }
 
- // --- バリデーション ---
-      $data = $request->validate([
-        'date'    => ['required','date_format:Y-m-d'],
-        'program' => ['required', \Illuminate\Validation\Rule::in(['tour','experience'])],
-        'slot'    => ['required', \Illuminate\Validation\Rule::in(['am','pm','full'])],
-        'status'  => ['nullable', \Illuminate\Validation\Rule::in(['booked','done','cancelled'])],
-        'last_name' => ['nullable','string','max:191'],
-        'first_name'=> ['nullable','string','max:191'],
-        'email'     => ['nullable','email','max:191'],
-        'phone'     => ['nullable','string','max:32','regex:/^[0-9()+\s-]{8,}$/u'],
-        'contact'   => ['nullable','string','max:191'],
-        'notebook_type'=>['nullable','string','max:32'],
-        'has_certificate'=>['nullable','boolean'],
-        'note'      => ['nullable','string','max:2000'],
-    ]);
+            // --- バリデーション ---
+            $data = $request->validate([
+                'date'    => ['required', 'date_format:Y-m-d'],
+                'slot'    => ['required', \Illuminate\Validation\Rule::in(['am', 'pm', 'full'])],
+                'last_name' => ['nullable', 'string', 'max:191'],
+                'first_name' => ['nullable', 'string', 'max:191'],
+                'email'     => ['nullable', 'email', 'max:191'],
+                'phone'     => ['nullable', 'string', 'max:32', 'regex:/^[0-9()+\s-]{8,}$/u'],
+                'contact'   => ['nullable', 'string', 'max:191'],
+                'notebook_type' => ['nullable', 'string', 'max:32'],
+                'has_certificate' => ['nullable', 'boolean'],
+                'note'      => ['nullable', 'string', 'max:2000'],
+            ]);
 
-         // --- 業務ルール ---
-    if (($data['program'] ?? null) === 'tour' && ($data['slot'] ?? null) === 'full') {
-        return response()->json(['message'=>'tour の full は許可されていません'],422,$this->cors($request),$this->jsonFlags);
-    }
+            // サーバー側で強制固定
+            $data['program'] = 'tour';
+            $data['status'] = 'pending';
 
-    // --- デフォルト値 ---
-    $data['status'] = $data['status'] ?? 'booked';
-    $data['has_certificate'] = (bool)($data['has_certificate'] ?? false);
-    $data['name'] = $this->buildFallbackName($data);
+            $data['has_certificate'] = (bool)($data['has_certificate'] ?? false);
+            $data['name'] = $this->buildFallbackName($data);
 
-   // --- 時間枠計算（JST→UTC） ---
-    [$startAt, $endAt] = $this->calcWindow($data['date'], $data['slot']);
-    $data['start_at'] = $startAt;
-    $data['end_at']   = $endAt;
+            [$startAt, $endAt] = $this->calcWindow($data['date'], $data['slot']);
+            $data['start_at'] = $startAt;
+            $data['end_at']   = $endAt;
 
-   // --- 作成（重複チェックはDBトリガに任せる） ---
-    $created = Reservation::create($data);
+            // --- 業務ルール ---
+            if (($data['program'] ?? null) === 'tour' && ($data['slot'] ?? null) === 'full') {
+                return response()->json(['message' => 'tour の full は許可されていません'], 422, $this->cors($request), $this->jsonFlags);
+            }
+
+            // --- デフォルト値 ---
+            $data['status'] = $data['status'] ?? 'booked';
+            $data['has_certificate'] = (bool)($data['has_certificate'] ?? false);
+            $data['name'] = $this->buildFallbackName($data);
+
+            // --- 時間枠計算（JST→UTC） ---
+            [$startAt, $endAt] = $this->calcWindow($data['date'], $data['slot']);
+            $data['start_at'] = $startAt;
+            $data['end_at']   = $endAt;
+
+            // --- 作成（重複チェックはDBトリガに任せる） ---
+            $created = Reservation::create($data);
 
             return response()->json($created->toArray(), 201, $this->cors($request), $this->jsonFlags);
-            
         } catch (QueryException $e) {
             if ($this->looksLikeOverlap($e)) {
                 return $this->overlapResponse($request);
@@ -113,12 +123,16 @@ class ReservationController extends Controller
                 return $this->overlapResponse($request);
             }
 
-            $status = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
+            // 置き換え（catch (\Throwable $e) 内のステータス決定ロジック）
+            $status = 500;
+            if ($e instanceof HttpExceptionInterface) {
+                $status = $e->getStatusCode();
+            }
             $payload = ['message' => 'サーバーエラーが発生しました。'];
             if (config('app.debug')) {
                 $payload['exception'] = get_class($e);
                 $payload['detail'] = (string) $e->getMessage();
-                \Log::error('store error', [
+                Log::error('store error', [
                     'msg' => $e->getMessage(),
                     'file' => $e->getFile(),
                     'line' => $e->getLine(),
@@ -128,7 +142,6 @@ class ReservationController extends Controller
 
             return response()->json($payload, $status, $this->cors($request), $this->jsonFlags);
         }
-
     }
 
     /**
@@ -223,8 +236,7 @@ class ReservationController extends Controller
     {
         $data = $request->validate([
             'date' => ['sometimes', 'date'],
-            'program' => ['sometimes', Rule::in(['tour', 'experience'])],
-            'slot' => ['sometimes', Rule::in(['am', 'pm', 'full'])],
+            'slot' => ['sometimes', Rule::in(['am', 'pm'])],
             'status' => ['sometimes', Rule::in(['booked', 'done', 'cancelled'])],
 
             'name' => ['sometimes', 'nullable', 'string', 'max:191'],
@@ -242,6 +254,9 @@ class ReservationController extends Controller
 
         // マージ後の値を確定
         $merged = array_merge($reservation->toArray(), $data);
+
+        // 常に tour を強制
+        $merged['program'] = 'tour';
 
         // tour は full を禁止
         if (($merged['program'] ?? 'tour') === 'tour' && ($merged['slot'] ?? 'am') === 'full') {
@@ -309,58 +324,35 @@ class ReservationController extends Controller
     }
 
     /**
-     * 同一日の重複/占有ルールで409を返す
+     * 同日・同slotで既に "booked" がある場合は 409 を返す（program は tour 固定）
      *
-     * 仕様:
-     * - tour: am/pm は別枠。→ 同じ date+program+slot が存在したらNG
-     * - experience:
-     *     - full はその日の experience を占有。→ 同日に experience が1件でもあればNG
-     *     - am / pm は同日共存OK。ただし:
-     *         - 同日に full があればNG
-     *         - 同じ slot が既にあればNG
-     *
-     * 対象は status='booked' のみ。
+     * @param array $data             予約データ（date, slot 必須）
+     * @param int|null $excludeId     更新時に自分自身を除外したい場合のID（新規作成は null）
      */
-    protected function assertNoProgramOverlap(array $data): void
+    protected function assertNoProgramOverlap(array $data, ?int $excludeId = null): void
     {
         $date = $data['date'] ?? null;
-        $program = $data['program'] ?? null;
         $slot = $data['slot'] ?? null;
 
-        if (! $date || ! $program || ! $slot) {
+        if (! $date || ! $slot) {
             // 必須が欠けている場合はここでは判定しない（前段のバリデで弾く想定）
             return;
         }
 
-        $base = \App\Models\Reservation::query()
+        $q = \App\Models\Reservation::query()
             ->whereDate('date', $date)
-            ->where('program', $program)
-            ->where('status', 'booked');
+            ->where('program', 'tour')  // tour 固定
+            ->where('status', 'booked') // 確定した予約のみ重複判定
+            ->where('slot', $slot);      // am/pm 同一枠を禁止
 
-        $exists = false;
-
-        if ($program === 'tour') {
-            // tour: 同日の同一slot のみ重複禁止
-            $exists = (clone $base)->where('slot', $slot)->exists();
-
-        } else { // experience
-            if ($slot === 'full') {
-                // full: その日の experience が1件でもあればアウト
-                $exists = (clone $base)->exists();
-            } else {
-                // am/pm: その日に full があればアウト
-                $exists = (clone $base)->where('slot', 'full')->exists();
-                if (! $exists) {
-                    // 同一slot の重複もアウト
-                    $exists = (clone $base)->where('slot', $slot)->exists();
-                }
-            }
+        if ($excludeId !== null) {
+            $q->where('id', '<>', $excludeId); // 自分は除外（更新時）
         }
 
-        if ($exists) {
+        if ($q->exists()) {
             abort(response()->json([
                 'message' => 'duplicate/overlap',
-                'errors' => [
+                'errors'  => [
                     'date_slot' => ['この枠は既に埋まっています。別の日時/スロットを選んでください。'],
                 ],
             ], 409));
@@ -380,7 +372,7 @@ class ReservationController extends Controller
         $ln = trim((string) ($in['last_name'] ?? ''));
         $fn = trim((string) ($in['first_name'] ?? ''));
         if ($ln !== '' || $fn !== '') {
-            return $ln.$fn; // 和名連結（半角スペースを入れたい場合は "{$ln} {$fn}" に）
+            return $ln . $fn; // 和名連結（半角スペースを入れたい場合は "{$ln} {$fn}" に）
         }
 
         return 'ゲスト';

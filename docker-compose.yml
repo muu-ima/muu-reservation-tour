@@ -8,7 +8,8 @@ services:
     ports:
       - "8081:80"
     volumes:
-      - ./backend:/var/www/html           # ← :ro を外す（RW）
+      - ./backend:/var/www/html            # プロジェクト一式をマウント
+      - ./backend/.env:/var/www/html/.env  # ← .env を明示的にマウント
     environment:
       - APP_ENV=local
       - APP_DEBUG=true
@@ -32,6 +33,7 @@ services:
       - ./frontend:/app
       # node_modules はコンテナ側に隔離して所有権事故を防ぐ
       - /app/node_modules
+      - ./frontend/.env.local:/app/.env.loca
     environment:
       - NODE_ENV=development
     command: npm run dev
