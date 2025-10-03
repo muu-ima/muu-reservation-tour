@@ -239,6 +239,8 @@ export default function Page() {
 
   // 初回ロード
   useEffect(() => {
+    console.log("API_BASE=", API_BASE);  // ← 追加
+    
     fetchReservations();
     fetchAllReservations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
