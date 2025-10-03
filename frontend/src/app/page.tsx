@@ -208,7 +208,7 @@ export default function Page() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/reservations${buildQuery()}` as string, {
+      const res = await fetch(`${API_BASE}/api/reservations${buildQuery()}` as string, {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
