@@ -18,8 +18,8 @@ import ChatIcon from "./components/ChatIcon";
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
 // ============================================
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "https://muu-reservation-tour.onrender.com/";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
+
 // ========= 日付ユーティリティ =========
 const toDateStr = (d: string | Date) => {
   if (typeof d === "string") return d.slice(0, 10);
@@ -208,7 +208,7 @@ export default function Page() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/reservations${buildQuery()}` as string, {
+      const res = await fetch(`${API_BASE}/reservations${buildQuery()}` as string, {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
