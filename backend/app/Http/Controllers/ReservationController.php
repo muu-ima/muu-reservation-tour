@@ -94,7 +94,7 @@ class ReservationController extends Controller
             }
 
             // --- デフォルト値 ---
-            $data['status'] = $data['status'] ?? 'booked';
+            $data['status'] = $data['status'] ?? 'pending';
             $data['has_certificate'] = (bool)($data['has_certificate'] ?? false);
             $data['name'] = $this->buildFallbackName($data);
 
@@ -216,14 +216,14 @@ class ReservationController extends Controller
     private function cors(\Illuminate\Http\Request $request): array
     {
         $origin = $request->headers->get('Origin');
-    $ok = $origin && (
-        // 本番: Vercel の任意サブドメイン
-        preg_match('#^https://.*\.vercel\.app$#', $origin) ||
-        // 本番: 固定のフロントURL
-        in_array($origin, ['https://reservation-tour.vercel.app'], true) ||
-        // 開発: localhost / 127.0.0.1 の http/https かつ 3000（必要なら 5173 も）
-        preg_match('#^https?://(localhost|127\.0\.0\.1)(:(3000|5173))?$#', $origin)
-    );
+        $ok = $origin && (
+            // 本番: Vercel の任意サブドメイン
+            preg_match('#^https://.*\.vercel\.app$#', $origin) ||
+            // 本番: 固定のフロントURL
+            in_array($origin, ['https://reservation-tour.vercel.app'], true) ||
+            // 開発: localhost / 127.0.0.1 の http/https かつ 3000（必要なら 5173 も）
+            preg_match('#^https?://(localhost|127\.0\.0\.1)(:(3000|5173))?$#', $origin)
+        );
 
         return $ok ? [
             'Access-Control-Allow-Origin' => $origin,
@@ -241,7 +241,7 @@ class ReservationController extends Controller
         $data = $request->validate([
             'date' => ['sometimes', 'date'],
             'slot' => ['sometimes', Rule::in(['am', 'pm'])],
-            'status' => ['sometimes', Rule::in(['booked', 'done', 'cancelled'])],
+            'status' => ['sometimes', Rule::in(['pending', 'booked', 'done', 'cancelled'])],
 
             'name' => ['sometimes', 'nullable', 'string', 'max:191'],
             'last_name' => ['sometimes', 'nullable', 'string', 'max:191'],
@@ -284,8 +284,23 @@ class ReservationController extends Controller
         $merged['start_at'] = $startAt;
         $merged['end_at'] = $endAt;
 
-        // ★ 同一 program 限定の重複判定（自分は除外）
-        $this->assertNoProgramOverlap($merged, $reservation->id);
+        /* =======================================================
+        |  重複チェックの発火条件
+        |  - pending → booked になるとき
+        |  - booked のまま date/slot を変更するとき
+        ======================================================= */
+        if (
+            ($reservation->status !== 'booked' && ($data['status'] ?? null) === 'booked')
+            || (
+                $reservation->status === 'booked' &&
+                (
+                    ($data['date'] ?? null) ||
+                    ($data['slot'] ?? null)
+                )
+            )
+        ) {
+            $this->assertNoProgramOverlap($merged, $reservation->id);
+        }
 
         $reservation->fill($merged)->save();
 
