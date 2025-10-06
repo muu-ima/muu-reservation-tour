@@ -1,20 +1,32 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ReservationController;
 
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
 |
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
+| メール内の検証リンク（署名付きURL）を処理するルート
 |
 */
 
+// 🟢 署名付きURLを受け取って検証
+Route::get('/verify/{reservation}', [ReservationController::class, 'verify'])
+    ->name('reservations.verify')
+    ->middleware('signed'); // ← 署名チェック（期限もURL内に埋め込める）
+
+/*
+|--------------------------------------------------------------------------
+| 他のテストルート・ページ
+|--------------------------------------------------------------------------
+*/
+
+// デフォルトページ（開発時のみ残すならOK）
 Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/home', 'HomeController@index')->name('home');
+// もしHomeControllerを使っていないなら削除してOK
+// Route::get('/home', [HomeController::class, 'index'])->name('home');

@@ -9,9 +9,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Mail;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Log;
+use App\Mail\ReservationVerifyMail;
 
 class ReservationController extends Controller
 {
@@ -69,7 +72,7 @@ class ReservationController extends Controller
                 'slot'    => ['required', \Illuminate\Validation\Rule::in(['am', 'pm', 'full'])],
                 'last_name' => ['nullable', 'string', 'max:191'],
                 'first_name' => ['nullable', 'string', 'max:191'],
-                'email'     => ['nullable', 'email', 'max:191'],
+                'email'     => ['required', 'email', 'max:191'],
                 'phone'     => ['nullable', 'string', 'max:32', 'regex:/^[0-9()+\s-]{8,}$/u'],
                 'contact'   => ['nullable', 'string', 'max:191'],
                 'notebook_type' => ['nullable', 'string', 'max:32'],
@@ -103,10 +106,23 @@ class ReservationController extends Controller
             $data['start_at'] = $startAt;
             $data['end_at']   = $endAt;
 
-            // --- 作成（重複チェックはDBトリガに任せる） ---
-            $created = Reservation::create($data);
+            // 予約作成
+            $reservation = Reservation::create($data);
 
-            return response()->json($created->toArray(), 201, $this->cors($request), $this->jsonFlags);
+            // 検証情報セット
+            $reservation->verify_token = Str::uuid()->toString();
+            $reservation->verify_expires_at = now()->addHour();
+            $reservation->save();
+
+            // 署名付きURL (1時間有効)
+            $signedUrl = URL::temporarySignedRoute(
+                'reservations.verify',
+                $reservation->verify_expires_at,
+                ['reservation' => $reservation->id, 'token' => $reservation->verify_token]
+            );
+            // メール送信
+            Mail::to($reservation->email)->send(new ReservationVerifyMail($reservation, $signedUrl));
+            return response()->json($reservation, 201);
         } catch (QueryException $e) {
             if ($this->looksLikeOverlap($e)) {
                 return $this->overlapResponse($request);
@@ -395,5 +411,69 @@ class ReservationController extends Controller
         }
 
         return 'ゲスト';
+    }
+
+    /**
+     * GET /verify/{reservation}?token=xxxxx
+     * メール内リンクからのアクセスで予約確定処理を行う
+     */
+    public function verify(Request $request, Reservation $reservation)
+    {
+        // ① URL署名の検証（routes/web.php で ->middleware('signed') を付けていても二重で見ておくと安心）
+        if (! $request->hasValidSignature()) {
+            return response()->view('verify.error', [
+                'title' => '認証エラー',
+                'message' => 'リンクの有効期限が切れているか、URLが改ざんされています。',
+            ], 400);
+        }
+
+        // ② トークンの一致確認
+        $token = $request->query('token');
+        if (! $token || $token !== $reservation->verify_token) {
+            return response()->view('verify.error', [
+                'title' => '認証エラー',
+                'message' => '無効なリンクです。もう一度予約をやり直してください。',
+            ], 400);
+        }
+
+        // ③ すでに処理済みか
+        if ($reservation->status !== 'pending') {
+            return response()->view('verify.error', [
+                'title' => 'すでに処理済み',
+                'message' => 'この予約はすでに確定またはキャンセルされています。',
+            ], 409);
+        }
+
+        // ④ 期限切れなら自動キャンセル
+        if ($reservation->verify_expires_at && now()->greaterThan($reservation->verify_expires_at)) {
+            $reservation->status = 'cancelled';
+            $reservation->save();
+
+            return response()->view('verify.error', [
+                'title' => '期限切れ',
+                'message' => '確認リンクの有効期限が切れたため、予約はキャンセルされました。',
+            ], 410);
+        }
+
+        // ⑤ 枠の重複チェック（bookedにする前だけ実施）
+        $this->assertNoProgramOverlap([
+            'date'    => $reservation->date->toDateString(),
+            'slot'    => $reservation->slot,
+            'program' => 'tour',
+        ], $reservation->id);
+
+        // ⑥ 確定（booked）+ トークン無効化
+        $reservation->status = 'booked';
+        $reservation->verified_at = now();
+        $reservation->verify_token = null;
+        $reservation->verify_expires_at = null;
+        $reservation->save();
+
+        // ⑦ 完了画面
+        return response()->view('verify.success', [
+            'title' => '予約確定',
+            'message' => '予約が確定しました。ありがとうございます！',
+            'reservation' => $reservation,
+        ], 200);
     }
 }
