@@ -27,6 +27,14 @@ type Props = {
   onDelete: (id: number) => void;
 };
 
+// 状態ごとの色・ラベル設定
+const STATUS_STYLE: Record<Status, { label: string; color: string }> = {
+  pending:   { label: "仮予約", color: "bg-gray-200 text-gray-700" },
+  booked:    { label: "確定",   color: "bg-blue-200 text-blue-800" },
+  done:      { label: "完了",   color: "bg-green-200 text-green-800" },
+  cancelled: { label: "キャンセル", color: "bg-red-200 text-red-700" },
+};
+
 export default function ReservationTable({
   items,
   loading = false,
@@ -90,9 +98,18 @@ export default function ReservationTable({
                   </td>
                   <td className="py-2 pr-3 whitespace-nowrap">
                     {r.has_certificate ? "○" : "×"}
-                  </td>
+                    </td>
+                           {/* 状態バッジ */}
                   <td className="py-2 pr-3 whitespace-nowrap">
-                    {r.status ?? "-"}
+                    {r.status ? (
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLE[r.status].color}`}
+                      >
+                        {STATUS_STYLE[r.status].label}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   <td className="py-2 pr-3">
                     {r.id && (
@@ -108,30 +125,29 @@ export default function ReservationTable({
                           </button>
                         )}
                         {/* booked→done/cancelled */}
-                             {r.status === "booked" && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => onUpdateStatus(r.id!, "done")}
-                                                            className="px-3 py-1 rounded-xl border hover:bg-gray-50"
-                                                        >
-                                                            完了(done)
-                                                        </button>
-                                                        <button
-                                                            onClick={() => onUpdateStatus(r.id!, "cancelled")}
-                                                            className="px-3 py-1 rounded-xl border hover:bg-gray-50"
-                                                        >
-                                                            キャンセル(cancelled)
-                                                        </button>
-                                                    </>
-                                                )}
-                                                 {/* done/cancelled でも削除は常に可能 */}
-                                                <button
-                                                    onClick={() => onDelete(r.id!)}
-                                                    className="px-3 py-1 rounded-xl border text-red-600 hover:bg-red-50"
-                                                >
-                                                    削除
-                                                </button>
-                        
+                        {r.status === "booked" && (
+                          <>
+                            <button
+                              onClick={() => onUpdateStatus(r.id!, "done")}
+                              className="px-3 py-1 rounded-xl border hover:bg-gray-50"
+                            >
+                              完了(done)
+                            </button>
+                            <button
+                              onClick={() => onUpdateStatus(r.id!, "cancelled")}
+                              className="px-3 py-1 rounded-xl border hover:bg-gray-50"
+                            >
+                              キャンセル(cancelled)
+                            </button>
+                          </>
+                        )}
+                        {/* done/cancelled でも削除は常に可能 */}
+                        <button
+                          onClick={() => onDelete(r.id!)}
+                          className="px-3 py-1 rounded-xl border text-red-600 hover:bg-red-50"
+                        >
+                          削除
+                        </button>
                       </div>
                     )}
                   </td>
