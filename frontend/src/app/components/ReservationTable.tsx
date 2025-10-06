@@ -27,7 +27,6 @@ type Props = {
   onDelete: (id: number) => void;
 };
 
-// 状態ごとの色・ラベル設定
 const STATUS_STYLE: Record<Status, { label: string; color: string }> = {
   pending:   { label: "仮予約", color: "bg-gray-200 text-gray-700" },
   booked:    { label: "確定",   color: "bg-blue-200 text-blue-800" },
@@ -42,109 +41,111 @@ export default function ReservationTable({
   onDelete,
 }: Props) {
   return (
-    <div className="rounded-2xl bg-white shadow p-5">
+    <div className="rounded-2xl bg-white shadow p-5 not-prose">
       <h2 className="text-lg font-medium mb-3">予約一覧</h2>
+
       {loading && !items ? (
         <p className="text-sm text-gray-500">読み込み中…</p>
       ) : !items || items.length === 0 ? (
         <p className="text-sm text-gray-500">予約はまだありません。</p>
       ) : (
-        <div className="overflow-auto">
-          <table className="min-w-full text-sm">
+        // ① 横スクロールの“箱”に閉じ込める
+        <div className="overflow-x-auto -mx-1">
+          {/* ② table-fixed + colgroup で幅を固定 */}
+          <table className="min-w-[880px] w-full table-fixed text-sm border-collapse">
+            <colgroup>
+              <col className="w-14" />   {/* ID */}
+              <col className="w-28" />   {/* 日付 */}
+              <col className="w-24" />   {/* プログラム */}
+              <col className="w-20" />   {/* 時間帯 */}
+              <col className="w-24" />   {/* 姓 */}
+              <col className="w-24" />   {/* 名 */}
+              <col className="w-44" />   {/* メール */}
+              <col className="w-32" />   {/* 電話 */}
+              <col className="w-28" />   {/* 手帳 */}
+              <col className="w-20" />   {/* 受給者証 */}
+              <col className="w-24" />   {/* 状態 */}
+              <col className="w-[220px]" /> {/* 操作ボタン */}
+            </colgroup>
+
             <thead>
               <tr className="text-left text-gray-500">
-                <th className="py-2 pr-3">ID</th>
-                <th className="py-2 pr-3">日付</th>
-                <th className="py-2 pr-3">プログラム</th>
-                <th className="py-2 pr-3">時間帯</th>
-                <th className="py-2 pr-3">姓</th>
-                <th className="py-2 pr-3">名</th>
-                <th className="py-2 pr-3">メール</th>
-                <th className="py-2 pr-3">電話</th>
-                <th className="py-2 pr-3">手帳</th>
-                <th className="py-2 pr-3">受給者証</th>
-                <th className="py-2 pr-3">状態</th>
-                <th className="py-2 pr-3">操作</th>
+                <th className="py-2 px-2">ID</th>
+                <th className="py-2 px-2">日付</th>
+                <th className="py-2 px-2">プログラム</th>
+                <th className="py-2 px-2">時間帯</th>
+                <th className="py-2 px-2">姓</th>
+                <th className="py-2 px-2">名</th>
+                <th className="py-2 px-2">メール</th>
+                <th className="py-2 px-2">電話</th>
+                <th className="py-2 px-2">手帳</th>
+                <th className="py-2 px-2">受給者証</th>
+                <th className="py-2 px-2">状態</th>
+                <th className="py-2 px-2">操作</th>
               </tr>
             </thead>
+
             <tbody>
               {items.map((r) => (
                 <tr
                   key={`${r.id ?? r.date + "-" + r.slot}`}
-                  className="border-t align-top"
+                  className="border-t align-top hover:bg-gray-50 transition-colors"
                 >
-                  <td className="py-2 pr-3 whitespace-nowrap">{r.id ?? "-"}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
-                    {typeof r.date === "string"
-                      ? r.date.slice(0, 10)
-                      : String(r.date)}
+                  {/* ③ 各セルは nowrap + truncate でハミ出し抑制 */}
+                  <td className="py-2 px-2 whitespace-nowrap">{r.id ?? "-"}</td>
+                  <td className="py-2 px-2 whitespace-nowrap">
+                    {typeof r.date === "string" ? r.date.slice(0, 10) : String(r.date)}
                   </td>
-                  <td className="py-2 pr-3 whitespace-nowrap">{r.program}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap">{r.slot}</td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
-                    {r.last_name ?? ""}
-                  </td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
-                    {r.first_name ?? ""}
-                  </td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
-                    {r.email ?? ""}
-                  </td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
-                    {r.phone ?? ""}
-                  </td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
-                    {r.notebook_type ?? ""}
-                  </td>
-                  <td className="py-2 pr-3 whitespace-nowrap">
-                    {r.has_certificate ? "○" : "×"}
-                    </td>
-                           {/* 状態バッジ */}
-                  <td className="py-2 pr-3 whitespace-nowrap">
+                  <td className="py-2 px-2 whitespace-nowrap">{r.program}</td>
+                  <td className="py-2 px-2 whitespace-nowrap">{r.slot}</td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.last_name ?? ""}</td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.first_name ?? ""}</td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.email ?? ""}</td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.phone ?? ""}</td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.notebook_type ?? ""}</td>
+                  <td className="py-2 px-2 whitespace-nowrap">{r.has_certificate ? "○" : "×"}</td>
+
+                  <td className="py-2 px-2 whitespace-nowrap">
                     {r.status ? (
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLE[r.status].color}`}
-                      >
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLE[r.status].color}`}>
                         {STATUS_STYLE[r.status].label}
                       </span>
                     ) : (
                       "-"
                     )}
                   </td>
-                  <td className="py-2 pr-3">
+
+                  {/* ④ ボタン群は text-xs + gap を調整して崩れ防止 */}
+                  <td className="py-2 px-2">
                     {r.id && (
-                      <div className="flex flex-wrap gap-2">
-                        {/* pending→booked用 */}
+                      <div className="flex flex-wrap gap-1.5">
                         {r.status === "pending" && (
                           <button
                             onClick={() => onUpdateStatus(r.id!, "booked")}
-                            className="px-3 py-1 rounded-xl border hover:bg-gray-50"
-                            title="予約に戻す"
+                            className="px-2.5 py-1 text-xs rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50"
                           >
-                            確定(booked)
+                            確定
                           </button>
                         )}
-                        {/* booked→done/cancelled */}
                         {r.status === "booked" && (
                           <>
                             <button
                               onClick={() => onUpdateStatus(r.id!, "done")}
-                              className="px-3 py-1 rounded-xl border hover:bg-gray-50"
+                              className="px-2.5 py-1 text-xs rounded-lg border border-green-300 text-green-700 hover:bg-green-50"
                             >
-                              完了(done)
+                              完了
                             </button>
                             <button
                               onClick={() => onUpdateStatus(r.id!, "cancelled")}
-                              className="px-3 py-1 rounded-xl border hover:bg-gray-50"
+                              className="px-2.5 py-1 text-xs rounded-lg border border-red-300 text-red-700 hover:bg-red-50"
                             >
-                              キャンセル(cancelled)
+                              キャンセル
                             </button>
                           </>
                         )}
-                        {/* done/cancelled でも削除は常に可能 */}
                         <button
                           onClick={() => onDelete(r.id!)}
-                          className="px-3 py-1 rounded-xl border text-red-600 hover:bg-red-50"
+                          className="px-2.5 py-1 text-xs rounded-lg border text-red-600 hover:bg-red-50"
                         >
                           削除
                         </button>
