@@ -19,7 +19,7 @@ import ChatIcon from "./components/ChatIcon";
 // ============================================
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "https://muu-reservation-tour.onrender.com/";
+  process.env.NEXT_PUBLIC_API_BASE ?? "https://muu-reservation-tour.onrender.com/api/reservations";
 // ========= 日付ユーティリティ =========
 const toDateStr = (d: string | Date) => {
   if (typeof d === "string") return d.slice(0, 10);
