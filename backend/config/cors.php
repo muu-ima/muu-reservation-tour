@@ -8,6 +8,7 @@ return [
     'allowed_origins' => [
         'https://muu-reservation-tour.vercel.app',
         'http://localhost:3000',
+        'https://localhost:3000',
     ],
 
     // ★ プレビュー( *.vercel.app )を許可したいならこちら

@@ -216,10 +216,14 @@ class ReservationController extends Controller
     private function cors(\Illuminate\Http\Request $request): array
     {
         $origin = $request->headers->get('Origin');
-        $ok = $origin && (
-            preg_match('#^https://.*\.vercel\.app$#', $origin) ||
-            in_array($origin, ['https://muu-reservation.vercel.app', 'http://localhost:3000', 'https://localhost:3000'], true)
-        );
+    $ok = $origin && (
+        // 本番: Vercel の任意サブドメイン
+        preg_match('#^https://.*\.vercel\.app$#', $origin) ||
+        // 本番: 固定のフロントURL
+        in_array($origin, ['https://reservation-tour.vercel.app'], true) ||
+        // 開発: localhost / 127.0.0.1 の http/https かつ 3000（必要なら 5173 も）
+        preg_match('#^https?://(localhost|127\.0\.0\.1)(:(3000|5173))?$#', $origin)
+    );
 
         return $ok ? [
             'Access-Control-Allow-Origin' => $origin,
