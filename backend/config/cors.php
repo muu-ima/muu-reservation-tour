@@ -6,9 +6,8 @@ return [
 
     // ★ 完全一致（末尾 / なし）
     'allowed_origins' => [
-        'https://muu-reservation.vercel.app',
+        'https://muu-reservation-tour.vercel.app',
         'http://localhost:3000',
-        'https://localhost:3000',
     ],
 
     // ★ プレビュー( *.vercel.app )を許可したいならこちら
