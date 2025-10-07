@@ -10,7 +10,7 @@ import type {
 } from "@/types/reservation";
 import { isProgram, isSlot, getErrorMessage } from "@/types/reservation";
 import CreateReservationModal from "@/components/CreateReservationModal";
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion";
 import ChatIcon from "./components/ChatIcon";
 
 // ============================================
@@ -19,12 +19,20 @@ import ChatIcon from "./components/ChatIcon";
 // ============================================
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? "https://muu-reservation-tour.onrender.com/api";
+  process.env.NEXT_PUBLIC_API_BASE ??
+  "https://muu-reservation-tour.onrender.com/api";
 // ========= 日付ユーティリティ =========
 const toDateStr = (d: string | Date) => {
   if (typeof d === "string") return d.slice(0, 10);
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10);
 };
+
+function isBeforeDateStr(a: string, b: string) {
+  // YYYY-MM-DD 同士の比較
+  return new Date(a) < new Date(b);
+}
 
 // === 休業日（週末）ユーティリティ ===
 function dayOfWeekFromStr(s: string): number {
@@ -76,8 +84,8 @@ type SlotCounts = Record<Slot, number>;
 
 export default function Page() {
   // ===== State
-  const [items, setItems] = useState<Reservation[] | null>(null);          // 絞り込み一覧用
-  const [allItems, setAllItems] = useState<Reservation[] | null>(null);    // カレンダー用（全体）
+  const [items, setItems] = useState<Reservation[] | null>(null); // 絞り込み一覧用
+  const [allItems, setAllItems] = useState<Reservation[] | null>(null); // カレンダー用（全体）
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,8 +97,8 @@ export default function Page() {
 
   // フリック関連：横だけ生かす
   const SWIPE = {
-    minX: 48,       // 横スワイプの最低距離 px
-    ratio: 1.5,     // 横優位の角度しきい（ax > ay*ratio）
+    minX: 48, // 横スワイプの最低距離 px
+    ratio: 1.5, // 横優位の角度しきい（ax > ay*ratio）
   };
 
   // 表示窓：前半 1〜14日（14日分）、後半 15日〜月末（残り全部）
@@ -110,7 +118,10 @@ export default function Page() {
     return d;
   });
 
-  const monthCells = useMemo(() => buildMonthCells(calCursor, true), [calCursor]);
+  const monthCells = useMemo(
+    () => buildMonthCells(calCursor, true),
+    [calCursor]
+  );
   const monthKey = useMemo(() => toDateStr(calCursor).slice(0, 7), [calCursor]); // YYYY-MM
 
   // ※ 体験/見学の切替は廃止。常に tour を対象にする
@@ -122,24 +133,50 @@ export default function Page() {
   const [createSlot, setCreateSlot] = useState<Slot | undefined>(undefined);
 
   function openCreate(dateStr?: string, slot?: Slot) {
-    // デフォは「次の平日」。土日が渡ってきた場合も平日に補正。
     const init = dateStr ?? nextBusinessDay();
     const safe = isWeekendStr(init) ? nextBusinessDayFromStr(init) : init;
+
+    // ★ 明日以降のみ予約可能にする
+    if (!isBookable(safe)) {
+      alert("本日以前や土日には予約を追加できません。");
+      return;
+    }
+
     setCreateDate(safe);
     setCreateSlot(slot);
     setIsCreateOpen(true);
   }
 
+  // === 予約可能かどうかを判定（明日以降のみ・土日不可） ===
+  function isBookable(dateStr: string) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = toDateStr(tomorrow);
+
+    // isBeforeDateStrで比較
+    return !isBeforeDateStr(dateStr, tomorrowStr) && !isWeekendStr(dateStr);
+  }
+
   // 月境界ユーティリティ
   const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
-  const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  const endOfMonth = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth() + 1, 0);
   const daysInMonth = (d: Date) => endOfMonth(d).getDate();
-  const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-  const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const addDays = (d: Date, n: number) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() + n);
+    return x;
+  };
+  const addMonths = (d: Date, n: number) =>
+    new Date(d.getFullYear(), d.getMonth() + n, 1);
 
   // モバイル用：期間アンカー（1日 or 15日固定） & 横フリック検出
-  const [mobileAnchor, setMobileAnchor] = useState<Date>(() => startOfMonth(new Date()));
-  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+  const [mobileAnchor, setMobileAnchor] = useState<Date>(() =>
+    startOfMonth(new Date())
+  );
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const mobileListRef = useRef<HTMLDivElement | null>(null);
 
   // 月が変わったらアンカーをその月の1日に寄せ直す
@@ -166,7 +203,8 @@ export default function Page() {
     const t = e.changedTouches[0];
     const dx = t.clientX - touchStart.x;
     const dy = t.clientY - touchStart.y;
-    const ax = Math.abs(dx), ay = Math.abs(dy);
+    const ax = Math.abs(dx),
+      ay = Math.abs(dy);
 
     const isHorizontal = ax > ay * SWIPE.ratio;
     const passX = ax >= SWIPE.minX;
@@ -208,10 +246,13 @@ export default function Page() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/reservations${buildQuery()}` as string, {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `${API_BASE}/reservations${buildQuery()}` as string,
+        {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        }
+      );
       if (!res.ok) throw new Error(`GET /reservations failed: ${res.status}`);
       const data: Reservation[] = await res.json();
       setItems(data);
@@ -265,7 +306,9 @@ export default function Page() {
 
       const composedName =
         (payload.name && payload.name.trim()) ||
-        `${payload.last_name ?? ""}${payload.first_name ? ` ${payload.first_name}` : ""}`.trim() ||
+        `${payload.last_name ?? ""}${
+          payload.first_name ? ` ${payload.first_name}` : ""
+        }`.trim() ||
         "ゲスト";
 
       // program はサーバ側で 'tour' 固定にするのが基本だが、念のためクライアントでも固定。
@@ -273,7 +316,10 @@ export default function Page() {
 
       const res = await fetch(`${API_BASE}/reservations`, {
         method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(body),
       });
 
@@ -283,14 +329,19 @@ export default function Page() {
       }
       if (!res.ok) {
         const js = await res.json().catch(() => ({}));
-        throw new Error(js.message || `予約の作成に失敗しました（${res.status}）`);
+        throw new Error(
+          js.message || `予約の作成に失敗しました（${res.status}）`
+        );
       }
 
       const created: Reservation = await res.json();
       setSuccess("予約を作成しました");
       setItems((prev) => (prev ? [created, ...prev] : [created]));
       setAllItems((prev) => (prev ? [created, ...prev] : [created]));
-      setFilter((f) => ({ ...f, date: toDateStr(created.date ?? payload.date) }));
+      setFilter((f) => ({
+        ...f,
+        date: toDateStr(created.date ?? payload.date),
+      }));
       setIsCreateOpen(false);
     } catch (e: unknown) {
       setError(getErrorMessage(e));
@@ -364,7 +415,9 @@ export default function Page() {
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl md:text-3xl font-semibold">Reservations Admin</h1>
+          <h1 className="text-2xl md:text-3xl font-semibold">
+            Reservations Admin
+          </h1>
           <div className="flex items-center gap-2">
             <button
               onClick={fetchReservations}
@@ -385,10 +438,14 @@ export default function Page() {
         {(error || success) && (
           <div className="space-y-2">
             {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                {error}
+              </div>
             )}
             {success && (
-              <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">{success}</div>
+              <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                {success}
+              </div>
             )}
           </div>
         )}
@@ -399,15 +456,25 @@ export default function Page() {
             <div className="flex items-center gap-3 flex-wrap">
               <button
                 className="px-3 py-1 rounded-xl border hover:bg-gray-50"
-                onClick={() => setCalCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                onClick={() =>
+                  setCalCursor(
+                    (d) => new Date(d.getFullYear(), d.getMonth() - 1, 1)
+                  )
+                }
                 aria-label="前の月"
               >
                 ←
               </button>
-              <span className="min-w-[10ch] text-center text-sm text-gray-700">{formatMonthJP(calCursor)}</span>
+              <span className="min-w-[10ch] text-center text-sm text-gray-700">
+                {formatMonthJP(calCursor)}
+              </span>
               <button
                 className="px-3 py-1 rounded-xl border hover:bg-gray-50"
-                onClick={() => setCalCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                onClick={() =>
+                  setCalCursor(
+                    (d) => new Date(d.getFullYear(), d.getMonth() + 1, 1)
+                  )
+                }
                 aria-label="次の月"
               >
                 →
@@ -430,7 +497,9 @@ export default function Page() {
           {/* 曜日ヘッダー — PC/タブレットのみ */}
           <div className="hidden md:grid grid-cols-7 text-xs text-gray-500">
             {["月", "火", "水", "木", "金", "土", "日"].map((w) => (
-              <div key={w} className="p-2 text-center font-medium">{w}</div>
+              <div key={w} className="p-2 text-center font-medium">
+                {w}
+              </div>
             ))}
           </div>
 
@@ -460,7 +529,10 @@ export default function Page() {
                     openCreate(cell.dateStr);
                   } else {
                     // 休業日は一覧へ（好みで変えてOK）
-                    setFilter((f) => ({ ...f, date: cell.dateStr /* , program: FIXED_PROGRAM */ }));
+                    setFilter((f) => ({
+                      ...f,
+                      date: cell.dateStr /* , program: FIXED_PROGRAM */,
+                    }));
                   }
                 };
 
@@ -472,33 +544,63 @@ export default function Page() {
                     className={[
                       "relative h-24 rounded-xl border p-2 text-left transition",
                       cell.inMonth ? "bg-white" : "bg-gray-50",
-                      isToday ? "ring-2 ring-blue-500" : "hover:shadow-sm"
+                      isToday ? "ring-2 ring-blue-500" : "hover:shadow-sm",
                     ].join(" ")}
                     whileTap={{ scale: 0.98 }}
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.15, delay: Math.min(i * 0.0025, 0.12) }}
+                    transition={{
+                      duration: 0.15,
+                      delay: Math.min(i * 0.0025, 0.12),
+                    }}
                     title={`${cell.dateStr}の操作`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className={"text-sm " + (cell.inMonth ? "text-gray-900" : "text-gray-400")}>
+                      <span
+                        className={
+                          "text-sm " +
+                          (cell.inMonth ? "text-gray-900" : "text-gray-400")
+                        }
+                      >
                         {cell.day}
                       </span>
                       {total > 0 && (
-                        <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">{total}</span>
+                        <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">
+                          {total}
+                        </span>
                       )}
                     </div>
 
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {counts.full > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">FULL×{counts.full}</span>}
-                      {counts.am > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">AM×{counts.am}</span>}
-                      {counts.pm > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">PM×{counts.pm}</span>}
+                      {counts.full > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
+                          FULL×{counts.full}
+                        </span>
+                      )}
+                      {counts.am > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
+                          AM×{counts.am}
+                        </span>
+                      )}
+                      {counts.pm > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
+                          PM×{counts.pm}
+                        </span>
+                      )}
                     </div>
 
                     {dayItems[0] && (
-                      <div className="mt-1 text-[11px] text-gray-500 truncate" aria-hidden>
-                        {(dayItems[0].last_name ?? "") + (dayItems[0].first_name ? ` ${dayItems[0].first_name}` : "")}
-                        {dayItems.length > 1 ? ` 他${dayItems.length - 1}件` : ""}
+                      <div
+                        className="mt-1 text-[11px] text-gray-500 truncate"
+                        aria-hidden
+                      >
+                        {(dayItems[0].last_name ?? "") +
+                          (dayItems[0].first_name
+                            ? ` ${dayItems[0].first_name}`
+                            : "")}
+                        {dayItems.length > 1
+                          ? ` 他${dayItems.length - 1}件`
+                          : ""}
                       </div>
                     )}
 
@@ -507,19 +609,22 @@ export default function Page() {
                       <span
                         className="pointer-events-none absolute right-1 bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs bg-white"
                         aria-hidden
-                      >＋</span>
+                      >
+                        ＋
+                      </span>
                     ) : (
                       <span
                         className="pointer-events-none absolute right-1 bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs text-gray-400 bg-gray-50"
                         aria-hidden
-                      >休</span>
+                      >
+                        休
+                      </span>
                     )}
                   </motion.button>
                 );
               })}
             </motion.div>
           </AnimatePresence>
-
 
           {/* ▼ モバイル用アジェンダ表示（スマホのみ, 半月ビュー＋横フリックで月移動） */}
           <div
@@ -531,9 +636,12 @@ export default function Page() {
             {/* ヘッダー */}
             <div className="flex items-center justify-between px-2 pb-2">
               <span className="text-sm text-gray-600">
-                {new Date(calCursor).getFullYear()}年 {new Date(calCursor).getMonth() + 1}月・モバイル表示
+                {new Date(calCursor).getFullYear()}年{" "}
+                {new Date(calCursor).getMonth() + 1}月・モバイル表示
               </span>
-              <span className="text-[11px] text-gray-400">横:月移動 ／ タブ:前半・後半</span>
+              <span className="text-[11px] text-gray-400">
+                横:月移動 ／ タブ:前半・後半
+              </span>
             </div>
 
             {(() => {
@@ -541,9 +649,12 @@ export default function Page() {
               const first = startOfMonth(calCursor);
               const dim = daysInMonth(calCursor);
               const anchorDay = mobileAnchor.getDate();
-              const length = anchorDay <= 14 ? MOBILE_WINDOW_DAYS : (dim - 14);
+              const length = anchorDay <= 14 ? MOBILE_WINDOW_DAYS : dim - 14;
               const windowCells = Array.from({ length }, (_, i) => {
-                const d = addDays(new Date(first.getFullYear(), first.getMonth(), anchorDay), i);
+                const d = addDays(
+                  new Date(first.getFullYear(), first.getMonth(), anchorDay),
+                  i
+                );
                 const dateStr = toDateStr(d);
                 return { dateStr, day: d.getDate(), dow: d.getDay() };
               });
@@ -553,20 +664,28 @@ export default function Page() {
                   {windowCells.map((cell) => {
                     const dayItems = dayMap[cell.dateStr] ?? [];
                     const counts = dayItems.reduce<Record<Slot, number>>(
-                      (acc, r) => ({ ...acc, [r.slot]: (acc[r.slot] ?? 0) + 1 }),
+                      (acc, r) => ({
+                        ...acc,
+                        [r.slot]: (acc[r.slot] ?? 0) + 1,
+                      }),
                       { am: 0, pm: 0, full: 0 }
                     );
                     const total = dayItems.length;
                     const isToday = cell.dateStr === toDateStr(new Date());
                     const isWeekendCell = isWeekendStr(cell.dateStr);
-                    const w = ["日", "月", "火", "水", "木", "金", "土"][cell.dow];
+                    const w = ["日", "月", "火", "水", "木", "金", "土"][
+                      cell.dow
+                    ];
 
                     return (
                       <li key={cell.dateStr}>
                         <div
                           className="flex items-center gap-3 px-3 py-2 active:bg-gray-50"
                           onClick={() =>
-                            setFilter((f) => ({ ...f, date: cell.dateStr /* , program: FIXED_PROGRAM */ }))
+                            setFilter((f) => ({
+                              ...f,
+                              date: cell.dateStr /* , program: FIXED_PROGRAM */,
+                            }))
                           }
                           role="button"
                           tabIndex={0}
@@ -574,28 +693,66 @@ export default function Page() {
                         >
                           {/* 日付バッジ（既存デザインのまま） */}
                           <div className="w-14 shrink-0 text-center">
-                            <div className={"text-base leading-5 " + (isToday ? "font-semibold text-blue-600" : "text-gray-900")}>
+                            <div
+                              className={
+                                "text-base leading-5 " +
+                                (isToday
+                                  ? "font-semibold text-blue-600"
+                                  : "text-gray-900")
+                              }
+                            >
                               {cell.day}
                             </div>
-                            <div className={"text-[10px] " + (isWeekendCell ? "text-red-500" : "text-gray-500")}>{w}</div>
+                            <div
+                              className={
+                                "text-[10px] " +
+                                (isWeekendCell
+                                  ? "text-red-500"
+                                  : "text-gray-500")
+                              }
+                            >
+                              {w}
+                            </div>
                           </div>
 
                           {/* 件数 / 先頭氏名 */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               {total > 0 && (
-                                <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">{total}件</span>
+                                <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">
+                                  {total}件
+                                </span>
                               )}
                               <div className="flex flex-wrap gap-1">
-                                {counts.full > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">FULL×{counts.full}</span>}
-                                {counts.am > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">AM×{counts.am}</span>}
-                                {counts.pm > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-md border">PM×{counts.pm}</span>}
+                                {counts.full > 0 && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
+                                    FULL×{counts.full}
+                                  </span>
+                                )}
+                                {counts.am > 0 && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
+                                    AM×{counts.am}
+                                  </span>
+                                )}
+                                {counts.pm > 0 && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
+                                    PM×{counts.pm}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             {dayItems[0] && (
-                              <div className="mt-0.5 text-[11px] text-gray-500 truncate" aria-hidden>
-                                {(dayItems[0].last_name ?? "") + (dayItems[0].first_name ? ` ${dayItems[0].first_name}` : "")}
-                                {dayItems.length > 1 ? ` 他${dayItems.length - 1}件` : ""}
+                              <div
+                                className="mt-0.5 text-[11px] text-gray-500 truncate"
+                                aria-hidden
+                              >
+                                {(dayItems[0].last_name ?? "") +
+                                  (dayItems[0].first_name
+                                    ? ` ${dayItems[0].first_name}`
+                                    : "")}
+                                {dayItems.length > 1
+                                  ? ` 他${dayItems.length - 1}件`
+                                  : ""}
                               </div>
                             )}
                           </div>
@@ -605,16 +762,23 @@ export default function Page() {
                             <button
                               type="button"
                               className="h-8 w-8 shrink-0 rounded-full border text-base leading-8 text-center bg-white hover:bg-gray-50"
-                              onClick={(e) => { e.stopPropagation(); openCreate(cell.dateStr); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCreate(cell.dateStr);
+                              }}
                               aria-label={`${cell.dateStr} に予約を追加`}
                               title="この日に予約を追加"
-                            >＋</button>
+                            >
+                              ＋
+                            </button>
                           ) : (
                             <div
                               className="h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
                               aria-disabled="true"
                               title="土日は休業日のため新規は作成できません"
-                            >休</div>
+                            >
+                              休
+                            </div>
                           )}
                         </div>
                       </li>
@@ -629,13 +793,17 @@ export default function Page() {
             </p>
           </div>
 
-          <p className="text-xs text-gray-500">日付タップで一覧に反映。右端「＋」でその日に新規作成。</p>
+          <p className="text-xs text-gray-500">
+            日付タップで一覧に反映。右端「＋」でその日に新規作成。
+          </p>
         </section>
 
         {/* ===== 検索/絞り込み（一覧） ===== */}
         {/* ここに一覧テーブルなどを置く想定（省略） */}
 
-        <footer className="text-xs text-gray-500 pt-4">API: <code>{API_BASE}</code></footer>
+        <footer className="text-xs text-gray-500 pt-4">
+          API: <code>{API_BASE}</code>
+        </footer>
       </div>
 
       {/* 予約作成モーダル */}
