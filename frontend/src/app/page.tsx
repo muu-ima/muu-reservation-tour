@@ -3,9 +3,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type {
   Reservation,
-  Program,
+  // Program, // ← 体験削除に伴い未使用
   Slot,
-  Status,
   ReservationFilterUI,
   ReservationCreatePayload,
 } from "@/types/reservation";
@@ -16,6 +15,7 @@ import ChatIcon from "./components/ChatIcon";
 
 // ============================================
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
+// ※ UIを「見学（tour）専用」に整理。体験（experience）関連UIを撤去。
 // ============================================
 
 const API_BASE =
@@ -99,7 +99,7 @@ export default function Page() {
   // 絞り込み（一覧用）
   const [filter, setFilter] = useState<ReservationFilterUI>(() => ({
     date: "",
-    program: "",
+    program: "", // ← UIからは触らない（バックエンド互換のためプロパティは温存）
     slot: "",
   }));
 
@@ -113,8 +113,8 @@ export default function Page() {
   const monthCells = useMemo(() => buildMonthCells(calCursor, true), [calCursor]);
   const monthKey = useMemo(() => toDateStr(calCursor).slice(0, 7), [calCursor]); // YYYY-MM
 
-  // カレンダーの表示対象（体験/見学）
-  const [calProgram, setCalProgram] = useState<Program>("experience");
+  // ※ 体験/見学の切替は廃止。常に tour を対象にする
+  const FIXED_PROGRAM = "tour" as const;
 
   // 予約作成モーダル
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -197,7 +197,7 @@ export default function Page() {
   const buildQuery = () => {
     const params = new URLSearchParams();
     if (filter.date) params.set("date", filter.date);
-    if (filter.program) params.set("program", filter.program);
+    // program は UI固定（tour）にしたためクエリに載せない
     if (filter.slot) params.set("slot", filter.slot);
     const qs = params.toString();
     return qs ? `?${qs}` : "";
@@ -253,7 +253,7 @@ export default function Page() {
   useEffect(() => {
     fetchReservations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter.date, filter.program, filter.slot]);
+  }, [filter.date, /* filter.program, */ filter.slot]);
 
   // ====== 新規作成（モーダルから呼ぶ）
   const createReservation = async (payload: ReservationCreatePayload) => {
@@ -268,7 +268,8 @@ export default function Page() {
         `${payload.last_name ?? ""}${payload.first_name ? ` ${payload.first_name}` : ""}`.trim() ||
         "ゲスト";
 
-      const body = { ...payload, name: composedName };
+      // program はサーバ側で 'tour' 固定にするのが基本だが、念のためクライアントでも固定。
+      const body = { ...payload, name: composedName, program: "tour" };
 
       const res = await fetch(`${API_BASE}/reservations`, {
         method: "POST",
@@ -298,65 +299,65 @@ export default function Page() {
     }
   };
 
-  const updateStatus = async (id: number, status: Status) => {
-    setError(null);
-    setSuccess(null);
-    try {
-      const res = await fetch(`${API_BASE}/reservations/${id}`, {
-        method: "PATCH",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (res.status === 409) {
-        const js = await res.json().catch(() => ({}));
-        throw new Error(js.message || "その時間帯は埋まっています");
-      }
-      if (!res.ok) {
-        const js = await res.json().catch(() => ({}));
-        throw new Error(js.message || `更新に失敗しました（${res.status}）`);
-      }
-      const updated: Reservation = await res.json();
-      setItems((prev) => prev?.map((r) => (r.id === id ? updated : r)) ?? null);
-      setAllItems((prev) => prev?.map((r) => (r.id === id ? updated : r)) ?? null);
-      setSuccess("状態を更新しました");
-    } catch (e: unknown) {
-      setError(getErrorMessage(e));
-    }
-  };
+  // const updateStatus = async (id: number, status: Status) => {
+  //   setError(null);
+  //   setSuccess(null);
+  //   try {
+  //     const res = await fetch(`${API_BASE}/reservations/${id}`, {
+  //       method: "PATCH",
+  //       headers: { Accept: "application/json", "Content-Type": "application/json" },
+  //       body: JSON.stringify({ status }),
+  //     });
+  //     if (res.status === 409) {
+  //       const js = await res.json().catch(() => ({}));
+  //       throw new Error(js.message || "その時間帯は埋まっています");
+  //     }
+  //     if (!res.ok) {
+  //       const js = await res.json().catch(() => ({}));
+  //       throw new Error(js.message || `更新に失敗しました（${res.status}）`);
+  //     }
+  //     const updated: Reservation = await res.json();
+  //     setItems((prev) => prev?.map((r) => (r.id === id ? updated : r)) ?? null);
+  //     setAllItems((prev) => prev?.map((r) => (r.id === id ? updated : r)) ?? null);
+  //     setSuccess("状態を更新しました");
+  //   } catch (e: unknown) {
+  //     setError(getErrorMessage(e));
+  //   }
+  // };
 
-  const deleteReservation = async (id: number) => {
-    if (!confirm("この予約を削除しますか？")) return;
-    setError(null);
-    setSuccess(null);
-    try {
-      const res = await fetch(`${API_BASE}/reservations/${id}`, {
-        method: "DELETE",
-        headers: { Accept: "application/json" },
-      });
-      if (!res.ok) {
-        const js = await res.json().catch(() => ({}));
-        throw new Error(js.message || `削除に失敗しました（${res.status}）`);
-      }
-      setItems((prev) => prev?.filter((r) => r.id !== id) ?? null);
-      setAllItems((prev) => prev?.filter((r) => r.id !== id) ?? null);
-      setSuccess("削除しました");
-    } catch (e: unknown) {
-      setError(getErrorMessage(e));
-    }
-  };
+  // const deleteReservation = async (id: number) => {
+  //   if (!confirm("この予約を削除しますか？")) return;
+  //   setError(null);
+  //   setSuccess(null);
+  //   try {
+  //     const res = await fetch(`${API_BASE}/reservations/${id}`, {
+  //       method: "DELETE",
+  //       headers: { Accept: "application/json" },
+  //     });
+  //     if (!res.ok) {
+  //       const js = await res.json().catch(() => ({}));
+  //       throw new Error(js.message || `削除に失敗しました（${res.status}）`);
+  //     }
+  //     setItems((prev) => prev?.filter((r) => r.id !== id) ?? null);
+  //     setAllItems((prev) => prev?.filter((r) => r.id !== id) ?? null);
+  //     setSuccess("削除しました");
+  //   } catch (e: unknown) {
+  //     setError(getErrorMessage(e));
+  //   }
+  // };
 
-  // ===== カレンダー用: 当月の予約を日付ごとに集計（体験/見学の切替反映）
+  // ===== カレンダー用: 当月の予約を日付ごとに集計（常に tour のみ）
   const dayMap = useMemo(() => {
     const map: Record<string, Reservation[]> = {};
     (allItems ?? []).forEach((r) => {
-      if (r.program !== calProgram) return;
+      if (r.program !== FIXED_PROGRAM) return;
       const ds = toDateStr(r.date);
       if (ds.startsWith(monthKey)) {
         (map[ds] ||= []).push(r);
       }
     });
     return map;
-  }, [allItems, monthKey, calProgram]);
+  }, [allItems, monthKey]);
 
   // ===== UI
   return (
@@ -422,61 +423,7 @@ export default function Page() {
                 今月
               </button>
 
-              {/* 体験 / 見学 タブ（アニメ付き） */}
-              <div className="ml-2">
-                <div className="relative inline-flex p-1 rounded-2xl bg-gray-100">
-                  <AnimatePresence initial={false}>
-                    <motion.span
-                      key={calProgram}
-                      layoutId="program-pill"
-                      className="absolute top-1 bottom-1 rounded-xl bg-white shadow"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ type: "spring", stiffness: 420, damping: 36, mass: 0.6 }}
-                      style={{
-                        left: calProgram === "experience" ? 4 : 64, // 64px ≒ ボタン幅に合わせて調整
-                        right: calProgram === "experience" ? 64 : 4,
-                      }}
-                    />
-                  </AnimatePresence>
-
-                  {(["experience", "tour"] as const).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setCalProgram(p)}
-                      aria-pressed={calProgram === p}
-                      className={[
-                        "relative z-10 px-4 py-1.5 text-sm rounded-xl transition",
-                        calProgram === p ? "text-gray-900" : "text-gray-500 hover:text-gray-700"
-                      ].join(" ")}
-                    >
-                      {p === "experience" ? "体験" : "見学"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 半月タブ：前半 / 後半 */}
-              <div className="ml-2 md:hidden">
-                <div className="inline-flex p-1 rounded-2xl bg-gray-100">
-                  {(["first", "second"] as const).map((h) => (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => setMobileHalf(h)}
-                      aria-pressed={mobileHalf === h}
-                      className={[
-                        "px-4 py-1.5 text-sm rounded-xl transition",
-                        mobileHalf === h ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
-                      ].join(" ")}
-                    >
-                      {h === "first" ? "前半 (1–14)" : "後半 (15–末)"}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* 体験/見学の切替UIは削除（tour固定） */}
             </div>
           </div>
 
@@ -490,7 +437,7 @@ export default function Page() {
           {/* 月グリッド — PC/タブレットのみ */}
           <AnimatePresence mode="wait">
             <motion.div
-              key={formatMonthJP(calCursor) + "_" + calProgram}
+              key={formatMonthJP(calCursor)}
               className="hidden md:grid grid-cols-7 gap-1"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -513,7 +460,7 @@ export default function Page() {
                     openCreate(cell.dateStr);
                   } else {
                     // 休業日は一覧へ（好みで変えてOK）
-                    setFilter((f) => ({ ...f, date: cell.dateStr, program: calProgram }));
+                    setFilter((f) => ({ ...f, date: cell.dateStr /* , program: FIXED_PROGRAM */ }));
                   }
                 };
 
@@ -619,7 +566,7 @@ export default function Page() {
                         <div
                           className="flex items-center gap-3 px-3 py-2 active:bg-gray-50"
                           onClick={() =>
-                            setFilter((f) => ({ ...f, date: cell.dateStr, program: calProgram }))
+                            setFilter((f) => ({ ...f, date: cell.dateStr /* , program: FIXED_PROGRAM */ }))
                           }
                           role="button"
                           tabIndex={0}
@@ -696,7 +643,7 @@ export default function Page() {
         open={isCreateOpen}
         initialDate={createDate}
         initialSlot={createSlot}
-        // initialProgram={calProgram} // ← モーダルが対応済みなら有効化
+        // initialProgram={"tour"} // ← モーダル側が対応済みなら固定で渡してもOK
         onClose={() => setIsCreateOpen(false)}
         onSubmit={createReservation}
       />
