@@ -98,7 +98,7 @@ class ReservationController extends Controller
             // 署名付きURL（1時間有効）
             $signedUrl = URL::temporarySignedRoute(
                 'reservations.verify',
-                $reservation->verify_expires_at,
+                now()->addHour(),
                 ['reservation' => $reservation->id, 'token' => $reservation->verify_token]
             );
 
