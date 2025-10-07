@@ -268,11 +268,11 @@ class ReservationController extends Controller
             ], 410);
         }
 
-        $this->assertNoProgramOverlap([
-            'date'    => $reservation->date->toDateString(),
-            'slot'    => $reservation->slot,
-            'program' => 'tour',
-        ], $reservation->id);
+        // $this->assertNoProgramOverlap([
+        //     'date'    => $reservation->date->toDateString(),
+        //     'slot'    => $reservation->slot,
+        //     'program' => 'tour',
+        // ], $reservation->id);
 
         $reservation->status = 'booked';
         $reservation->verified_at = now();
