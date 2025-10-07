@@ -48,7 +48,7 @@ class ReservationController extends Controller
     {
         Log::info('🟢 store() started', ['input' => $request->all()]);
         try {
-               Log::info('✅ store() entered', $request->all());
+            Log::info('✅ store() entered', $request->all());
 
             // 軽い正規化
             if ($request->filled('phone')) {
@@ -118,6 +118,14 @@ class ReservationController extends Controller
 
             if ($this->looksLikeOverlap($e)) {
                 return $this->overlapResponse($request);
+                // ← ここを無条件ログに変更（本番でも必ず出る）
+                Log::error('❌ store() failed', [
+                    'exception' => get_class($e),
+                    'message'   => $e->getMessage(),
+                    'file'      => $e->getFile(),
+                    'line'      => $e->getLine(),
+                    'trace'     => collect($e->getTrace())->take(3),
+                ]);
             }
 
             $status = 500;
