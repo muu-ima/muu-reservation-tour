@@ -8,14 +8,14 @@ use Illuminate\Http\Request;
 class TrustProxies extends Middleware
 {
     /**
-     * The trusted proxies for this application.
+     * Render 等の PaaS ではワイルドカードでOK
      *
-     * @var array|string
+     * @var array|string|null
      */
-    protected $proxies;
+    protected $proxies = '*';
 
     /**
-     * The headers that should be used to detect proxies.
+     * X-Forwarded-* ヘッダを明示的に許可（ALL を使わず個別に列挙）
      *
      * @var int
      */
