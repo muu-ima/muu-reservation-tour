@@ -46,8 +46,9 @@ class ReservationController extends Controller
      * =============================== */
     public function store(Request $request)
     {
+        Log::info('🟢 store() started', ['input' => $request->all()]);
         try {
-            Log::info('req', $request->all());
+               Log::info('✅ store() entered', $request->all());
 
             // 軽い正規化
             if ($request->filled('phone')) {
@@ -127,7 +128,7 @@ class ReservationController extends Controller
             if (config('app.debug')) {
                 $payload['exception'] = get_class($e);
                 $payload['detail'] = (string) $e->getMessage();
-                Log::error('store error', [
+                Log::error('❌ store() failed',  [
                     'msg' => $e->getMessage(),
                     'file' => $e->getFile(),
                     'line' => $e->getLine(),
