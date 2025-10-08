@@ -102,9 +102,16 @@ class ReservationController extends Controller
                 ['reservation' => $reservation->id, 'token' => $reservation->verify_token]
             );
 
-            // メール送信
-            Mail::to($reservation->email)->send(new ReservationVerifyMail($reservation, $signedUrl));
-
+            // メール送信（失敗しても500を返さないように変更）
+            try {
+                Mail::to($reservation->email)->send(new ReservationVerifyMail($reservation, $signedUrl));
+            } catch (\Throwable $mailEx) {
+                Log::warning('✉️ Mail send failed', [
+                    'to' => $reservation->email,
+                    'error' => $mailEx->getMessage(),
+                ]);
+                // 送信失敗でも予約自体は作成成功なので 201 を返す
+            }
             return response()->json($reservation, 201);
         } catch (QueryException $e) {
             if ($this->looksLikeOverlap($e)) {
@@ -286,34 +293,45 @@ class ReservationController extends Controller
             'reservation' => $reservation,
         ], 200);
     }
-     // 予約の重複（ユニーク制約違反）っぽいか判定
+    // 予約の重複（ユニーク制約違反）っぽいか判定
     private function looksLikeOverlap(\Throwable $e): bool
     {
         if ($e instanceof \Illuminate\Database\QueryException) {
-            // PostgreSQLの一意制約違反コード: 23505
-            $sqlState = $e->errorInfo[0] ?? null;
-            if ($sqlState === '23505') {
-                return true;
-            }
+            // PostgreSQLの一意制約違反 SQLSTATE は 23505
+            $code1 = $e->getCode();
+            $code2 = $e->errorInfo[0] ?? null;
+            if ($code1 === '23505' || $code2 === '23505') return true;
 
-            // 予備: 制約名で判定
-            $msg = ($e->errorInfo[2] ?? '') . ' ' . $e->getMessage();
+            $msg = (($e->errorInfo[2] ?? '') . ' ' . $e->getMessage());
             if (is_string($msg) && (
+                str_contains($msg, 'duplicate key value violates unique constraint') ||
                 str_contains($msg, 'uniq_reservations_active') ||
                 str_contains($msg, 'reservations_date_slot')
-            )) {
-                return true;
-            }
+            )) return true;
         }
         return false;
     }
 
-    // 409 Conflict を返す共通レスポンス
+    // 409 Conflict を返す共通レスポンス（CORS/JSONフラグ維持）
     private function overlapResponse(Request $request)
     {
         return response()->json([
             'message' => 'The selected date and slot are already reserved.',
             'error'   => 'duplicate_reservation',
         ], \Symfony\Component\HttpFoundation\Response::HTTP_CONFLICT, $this->cors($request), $this->jsonFlags);
+    }
+
+    // CORS ヘッダを返す簡易ヘルパ（必要に応じて調整）
+    private function cors(Request $request): array
+    {
+        $origin = $request->headers->get('Origin');
+        if (!$origin) {
+            return []; // Originが無い場合はヘッダ付けない
+        }
+        return [
+            'Access-Control-Allow-Origin'      => $origin,   // or '*' でも可
+            'Vary'                             => 'Origin',
+            'Access-Control-Allow-Credentials' => 'true',
+        ];
     }
 }
