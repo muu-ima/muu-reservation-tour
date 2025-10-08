@@ -286,4 +286,34 @@ class ReservationController extends Controller
             'reservation' => $reservation,
         ], 200);
     }
+     // 予約の重複（ユニーク制約違反）っぽいか判定
+    private function looksLikeOverlap(\Throwable $e): bool
+    {
+        if ($e instanceof \Illuminate\Database\QueryException) {
+            // PostgreSQLの一意制約違反コード: 23505
+            $sqlState = $e->errorInfo[0] ?? null;
+            if ($sqlState === '23505') {
+                return true;
+            }
+
+            // 予備: 制約名で判定
+            $msg = ($e->errorInfo[2] ?? '') . ' ' . $e->getMessage();
+            if (is_string($msg) && (
+                str_contains($msg, 'uniq_reservations_active') ||
+                str_contains($msg, 'reservations_date_slot')
+            )) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 409 Conflict を返す共通レスポンス
+    private function overlapResponse(Request $request)
+    {
+        return response()->json([
+            'message' => 'The selected date and slot are already reserved.',
+            'error'   => 'duplicate_reservation',
+        ], \Symfony\Component\HttpFoundation\Response::HTTP_CONFLICT, $this->cors($request), $this->jsonFlags);
+    }
 }

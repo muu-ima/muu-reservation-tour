@@ -21,10 +21,10 @@ class Kernel extends ConsoleKernel
      *
      * @return void
      */
-protected function schedule(\Illuminate\Console\Scheduling\Schedule $schedule): void
-{
-    $schedule->command('reservations:cancel-expired-pending')->everyFiveMinutes();
-}
+    protected function schedule(\Illuminate\Console\Scheduling\Schedule $schedule): void
+    {
+        $schedule->command('reservations:cancel-expired-pending')->everyFiveMinutes();
+    }
 
     /**
      * Register the commands for the application.
@@ -33,7 +33,7 @@ protected function schedule(\Illuminate\Console\Scheduling\Schedule $schedule): 
      */
     protected function commands()
     {
-        $this->load(__DIR__.'/Commands');
+        $this->load(__DIR__ . '/Commands');
 
         require base_path('routes/console.php');
     }
