@@ -21,11 +21,10 @@ class Kernel extends ConsoleKernel
      *
      * @return void
      */
-    protected function schedule(Schedule $schedule)
-    {
-        // $schedule->command('inspire')
-        //          ->hourly();
-    }
+protected function schedule(\Illuminate\Console\Scheduling\Schedule $schedule): void
+{
+    $schedule->command('reservations:cancel-expired-pending')->everyFiveMinutes();
+}
 
     /**
      * Register the commands for the application.
