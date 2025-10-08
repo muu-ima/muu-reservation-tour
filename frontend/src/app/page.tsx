@@ -8,7 +8,7 @@ import type {
   ReservationFilterUI,
   ReservationCreatePayload,
 } from "@/types/reservation";
-import { isProgram, isSlot, getErrorMessage } from "@/types/reservation";
+import { getErrorMessage } from "@/types/reservation";
 import CreateReservationModal from "@/components/CreateReservationModal";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatIcon from "./components/ChatIcon";
@@ -28,11 +28,6 @@ const toDateStr = (d: string | Date) => {
     .toISOString()
     .slice(0, 10);
 };
-
-function isBeforeDateStr(a: string, b: string) {
-  // YYYY-MM-DD 同士の比較
-  return new Date(a) < new Date(b);
-}
 
 // === 休業日（週末）ユーティリティ ===
 function dayOfWeekFromStr(s: string): number {
@@ -136,10 +131,6 @@ export default function Page() {
   const [availabilityMap, setAvailabilityMap] = useState<
     Record<string, boolean>
   >({});
-  // 管理UI：最後にクリックした日（ON/OFF対象）
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  // 簡易：管理者モード（本番は認証と連動推奨）
-  const [isAdmin, setIsAdmin] = useState(false);
 
   // 「明日」の計算（JSTのズレは予約API側でJST運用しているのでここは日付文字列でOK）
   const tomorrow = useMemo(() => {
@@ -304,25 +295,6 @@ export default function Page() {
     } catch {}
   };
 
-  // 更新：PUT /availability/{date} { open: boolean }
-  const updateAvailability = async (dateStr: string, open: boolean) => {
-    try {
-      const res = await fetch(`${API_BASE}/availability/${dateStr}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          // "X-Admin-Key": process.env.NEXT_PUBLIC_ADMIN_API_KEY ?? "", // 本番は鍵を付けるなら
-        },
-        body: JSON.stringify({ open }),
-      });
-      if (!res.ok) throw new Error("failed");
-      setAvailabilityMap((m) => ({ ...m, [dateStr]: open }));
-    } catch {
-      setError("受付可否の更新に失敗しました");
-    }
-  };
-
   // 初回ロード
   useEffect(() => {
     fetchReservations();
@@ -462,7 +434,7 @@ export default function Page() {
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex items-center justify-between gap-3">
           <h1 className="text-2xl md:text-3xl font-semibold">
-            Reservations Admin
+            予約カレンダー
           </h1>
           <div className="flex items-center gap-2">
             <button
@@ -570,12 +542,13 @@ export default function Page() {
                 const isWeekendCell = isWeekendStr(cell.dateStr);
 
                 const handleTap = () => {
-                  setSelectedDate(cell.dateStr);
-                  if (!isBookable(cell.dateStr)) {
+                  if (isBookable(cell.dateStr)) {
+                    openCreate(cell.dateStr);
+                  } else {
+                    // 予約不可：一覧に反映させたいなら filter を更新
                     setFilter((f) => ({ ...f, date: cell.dateStr }));
-                    return;
+                    alert("本日以前・土日・停止日は予約できません。");
                   }
-                  openCreate(cell.dateStr);
                 };
 
                 return (
@@ -667,55 +640,6 @@ export default function Page() {
               })}
             </motion.div>
           </AnimatePresence>
-
-          {/* === 管理者モードセクション === */}
-          <section className="rounded-2xl bg-white shadow p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-medium">受付可否（管理）</h2>
-              <label className="text-xs inline-flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={isAdmin}
-                  onChange={(e) => setIsAdmin(e.target.checked)}
-                />
-                管理者モード
-              </label>
-            </div>
-
-            <div className="text-sm text-gray-600">
-              選択中の日付:{" "}
-              <span className="font-mono">{selectedDate ?? "—"}</span>
-            </div>
-
-            <div className="flex flex-wrap gap-2 items-center">
-              <button
-                className="px-3 py-1 rounded-xl border hover:bg-gray-50 disabled:opacity-50"
-                disabled={!isAdmin || !selectedDate}
-                onClick={() =>
-                  selectedDate && updateAvailability(selectedDate, true)
-                }
-              >
-                受付する（ON）
-              </button>
-              <button
-                className="px-3 py-1 rounded-xl border hover:bg-gray-50 disabled:opacity-50"
-                disabled={!isAdmin || !selectedDate}
-                onClick={() =>
-                  selectedDate && updateAvailability(selectedDate, false)
-                }
-              >
-                停止する（OFF）
-              </button>
-              <span className="text-xs text-gray-500">
-                ※ 管理者ON時のみ操作できます
-              </span>
-            </div>
-
-            <div className="text-xs text-gray-500">
-              明日より前は自動的に受付不可です。土日も不可（必要なら
-              isWeekendStr を調整）。
-            </div>
-          </section>
 
           {/* ▼ モバイル用アジェンダ表示（スマホのみ, 半月ビュー＋横フリックで月移動） */}
           <div
@@ -849,29 +773,29 @@ export default function Page() {
                           </div>
 
                           {/* 右端：＋ / 休（既存ロジック維持） */}
-{/* 右端：＋ / 停（isBookableで制御） */}
-{isBookable(cell.dateStr) ? (
-  <button
-    type="button"
-    className="h-8 w-8 shrink-0 rounded-full border text-base leading-8 text-center bg-white hover:bg-gray-50"
-    onClick={(e) => {
-      e.stopPropagation();
-      openCreate(cell.dateStr);
-    }}
-    aria-label={`${cell.dateStr} に予約を追加`}
-    title="この日に予約を追加"
-  >
-    ＋
-  </button>
-) : (
-  <div
-    className="h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
-    aria-disabled="true"
-    title="受付停止日または予約不可日です"
-  >
-    停
-  </div>
-)}
+                          {/* 右端：＋ / 停（isBookableで制御） */}
+                          {isBookable(cell.dateStr) ? (
+                            <button
+                              type="button"
+                              className="h-8 w-8 shrink-0 rounded-full border text-base leading-8 text-center bg-white hover:bg-gray-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCreate(cell.dateStr);
+                              }}
+                              aria-label={`${cell.dateStr} に予約を追加`}
+                              title="この日に予約を追加"
+                            >
+                              ＋
+                            </button>
+                          ) : (
+                            <div
+                              className="h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
+                              aria-disabled="true"
+                              title="受付停止日または予約不可日です"
+                            >
+                              停
+                            </div>
+                          )}
                         </div>
                       </li>
                     );
