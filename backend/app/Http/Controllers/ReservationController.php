@@ -316,7 +316,7 @@ class ReservationController extends Controller
     private function overlapResponse(Request $request)
     {
         return response()->json([
-            'message' => 'The selected date and slot are already reserved.',
+            'message' => 'その日時は仮予約/確定済みです。別の枠を選んでください。',
             'error'   => 'duplicate_reservation',
         ], \Symfony\Component\HttpFoundation\Response::HTTP_CONFLICT, $this->cors($request), $this->jsonFlags);
     }

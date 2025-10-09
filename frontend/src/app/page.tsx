@@ -275,12 +275,31 @@ export default function Page() {
   }, [filter.date, filter.slot]);
 
   // ====== 新規作成（モーダルから呼ぶ）
+
+  // 1) 先頭 or 関数外にユーティリティを用意（any不使用）
+  function safeMessage(x: unknown): string | undefined {
+    if (x && typeof x === "object") {
+      const rec = x as Record<string, unknown>;
+      const m = rec["message"];
+      if (typeof m === "string") return m;
+    }
+    return undefined;
+  }
+
+  function isReservation(x: unknown): x is Reservation {
+    if (!x || typeof x !== "object") return false;
+    const r = x as Partial<Reservation>;
+    // 最低限のフィールドでバリデーション（必要に応じて厳しく）
+    return typeof r === "object" && r !== null && "status" in (r as object);
+  }
+
   const createReservation = async (payload: ReservationCreatePayload) => {
     setSubmitting(true);
     setError(null);
     setSuccess(null);
     try {
       if (!payload.date) throw new Error("日付を入力してください");
+
       const composedName =
         (payload.name && payload.name.trim()) ||
         `${payload.last_name ?? ""}${
@@ -299,19 +318,43 @@ export default function Page() {
         body: JSON.stringify(body),
       });
 
-      if (res.status === 409) {
-        const js = await res.json().catch(() => ({}));
-        throw new Error(js.message || "その時間帯は埋まっています");
+      // JSONが返らないケースに備えて unknown で受ける
+      let js: unknown = null;
+      try {
+        js = await res.json();
+      } catch {
+        // 何もしない（js は null のまま）
       }
-      if (!res.ok) {
-        const js = await res.json().catch(() => ({}));
+
+      if (res.status === 409) {
         throw new Error(
-          js.message || `予約の作成に失敗しました（${res.status}）`
+          safeMessage(js) ??
+            "その日時は仮予約/確定済みです。別の枠を選んでください。"
         );
       }
 
-      const created: Reservation = await res.json();
-      setSuccess("予約を作成しました");
+      if (res.status === 422) {
+        throw new Error(
+          safeMessage(js) ??
+            "入力内容に誤りがあります。必須項目・形式をご確認ください。"
+        );
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          safeMessage(js) ??
+            `予約の作成に失敗しました（${res.status}）。時間をおいて再度お試しください。`
+        );
+      }
+
+      // 201: 正常ケース。型ガードで確認してから使う
+      if (!isReservation(js)) {
+        throw new Error("サーバー応答の形式が不正です。");
+      }
+
+      // 201 Created
+      const created: Reservation = js;
+      setSuccess("仮予約を作成しました。確認メールをご確認ください。");
       setItems((prev) => (prev ? [created, ...prev] : [created]));
       setAllItems((prev) => (prev ? [created, ...prev] : [created]));
       setFilter((f) => ({
