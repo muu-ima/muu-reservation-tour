@@ -34,6 +34,7 @@ export default function CreateReservationModal({
 }: Props) {
   const [draft, setDraft] = useState<ReservationCreatePayload>(emptyDraft);
   const [loading, setLoading] = useState(false);
+  const [confirmChecked, setConfirmChecked] = useState<boolean>(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -261,11 +262,23 @@ export default function CreateReservationModal({
             </div>
           </fieldset>
 
+          {/* 確認チェック */}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="rounded border-gray-300"
+              checked={confirmChecked}
+              onChange={(e) => setConfirmChecked(e.target.checked)}
+              required
+            />
+            入力内容を確認しました
+          </label>
+
           {/* アクション */}
           <div className="flex gap-2 pt-3">
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !confirmChecked}
               className="w-full sm:flex-1 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold
                 hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
                 disabled:opacity-60 flex items-center justify-center gap-2"
@@ -316,4 +329,3 @@ function toDateStr(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-
