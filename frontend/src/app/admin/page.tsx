@@ -8,6 +8,8 @@ import ReservationTable, {
   Slot,
 } from "../components/ReservationTable";
 
+
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
   "https://muu-reservation-tour.onrender.com/api";
@@ -237,6 +239,7 @@ export default function AdminPage() {
         const hay = [
           r.last_name ?? "",
           r.first_name ?? "",
+          r.kana ?? "",
           r.email ?? "",
           r.phone ?? "",
           r.notebook_type ?? "",
@@ -334,7 +337,6 @@ export default function AdminPage() {
               >
                 <option value="all">すべて</option>
                 <option value="tour">tour</option>
-                <option value="experience">experience</option>
               </select>
             </label>
             <label className="text-xs text-gray-500">
@@ -349,7 +351,6 @@ export default function AdminPage() {
                 <option value="all">すべて</option>
                 <option value="am">am</option>
                 <option value="pm">pm</option>
-                <option value="full">full</option>
               </select>
             </label>
             <label className="text-xs text-gray-500">

@@ -14,6 +14,7 @@ export interface Reservation {
   status?: Status;
   last_name?: string | null;
   first_name?: string | null;
+  kana?: string;
   email?: string | null;
   phone?: string | null;
   notebook_type?: string | null;
@@ -52,7 +53,7 @@ export default function ReservationTable({
         // ① 横スクロールの“箱”に閉じ込める
         <div className="overflow-x-auto -mx-1">
           {/* ② table-fixed + colgroup で幅を固定 */}
-          <table className="min-w-[880px] w-full table-fixed text-sm border-collapse">
+          <table className="min-w-[980px] w-full table-fixed text-sm border-collapse">
             <colgroup>
               <col className="w-14" />   {/* ID */}
               <col className="w-28" />   {/* 日付 */}
@@ -60,6 +61,7 @@ export default function ReservationTable({
               <col className="w-20" />   {/* 時間帯 */}
               <col className="w-24" />   {/* 姓 */}
               <col className="w-24" />   {/* 名 */}
+              <col className="w-28" />   {/* かな */}
               <col className="w-44" />   {/* メール */}
               <col className="w-32" />   {/* 電話 */}
               <col className="w-28" />   {/* 手帳 */}
@@ -76,6 +78,7 @@ export default function ReservationTable({
                 <th className="py-2 px-2">時間帯</th>
                 <th className="py-2 px-2">姓</th>
                 <th className="py-2 px-2">名</th>
+                <th className="py-2 px-2">かな</th>
                 <th className="py-2 px-2">メール</th>
                 <th className="py-2 px-2">電話</th>
                 <th className="py-2 px-2">手帳</th>
@@ -100,6 +103,7 @@ export default function ReservationTable({
                   <td className="py-2 px-2 whitespace-nowrap">{r.slot}</td>
                   <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.last_name ?? ""}</td>
                   <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.first_name ?? ""}</td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.kana ?? ""}</td>
                   <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.email ?? ""}</td>
                   <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.phone ?? ""}</td>
                   <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.notebook_type ?? ""}</td>

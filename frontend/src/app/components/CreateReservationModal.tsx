@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import Modal from "@/components/Modal";
 import type {
   ReservationCreatePayload,
-  Program,
   Slot,
 } from "@/types/reservation";
 import { getErrorMessage } from "@/types/reservation";
@@ -79,6 +78,7 @@ export default function CreateReservationModal({
       name: nilIfEmpty(draft.name),
       last_name: nilIfEmpty(draft.last_name),
       first_name: nilIfEmpty(draft.first_name),
+      kana: nilIfEmpty(draft.kana),
       email: nilIfEmpty(draft.email),
       phone: toAsciiPhone(draft.phone),
       notebook_type: nilIfEmpty(draft.notebook_type),
