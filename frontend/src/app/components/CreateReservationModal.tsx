@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Modal from "@/components/Modal";
-import type {
-  ReservationCreatePayload,
-  Slot,
-} from "@/types/reservation";
+import type { ReservationCreatePayload, Slot } from "@/types/reservation";
 import { getErrorMessage } from "@/types/reservation";
 
 type Props = {
@@ -174,17 +171,20 @@ export default function CreateReservationModal({
                 required
               />
             </label>
+            <label className="col-span-2 text-sm">
+              <span className="block text-gray-600 mb-1">
+                ふりがな（例：たなか たろう）
+              </span>
+              <input
+                type="text"
+                className="w-full rounded-lg border px-3 py-1.5 focus:ring-2 focus:ring-blue-400"
+                value={draft.kana ?? ""}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, kana: e.target.value }))
+                }
+              />
+            </label>
           </div>
-          <Field label="ふりがな（例：たなか たろう）">
-            <input
-              type="text"
-              className="input-soft"
-              value={draft.kana ?? ""}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, kana: e.target.value }))
-              }
-            />
-          </Field>
 
           {/* メール */}
           <label className="text-sm">
@@ -317,22 +317,3 @@ function toDateStr(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="text-sm block">
-      <span className="block mb-1 text-zinc-600">
-        {label}
-        {required ? <span className="text-red-500 ml-0.5">*</span> : null}
-      </span>
-      {children}
-    </label>
-  );
-}
