@@ -96,6 +96,23 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // 管理画面からの変更通知を受けて、全件を取り直す
+  useEffect(() => {
+    const bc = new BroadcastChannel("reservations");
+    const onMsg = (ev: MessageEvent) => {
+      const t = ev.data?.type as string | undefined;
+      if (t === "deleted" || t === "status") {
+        // 同月内の変化はもちろん、月をまたぐ削除も拾えるよう全件を再取得
+        fetchAllReservations();
+      }
+    };
+    bc.addEventListener("message", onMsg);
+    return () => {
+      bc.removeEventListener("message", onMsg);
+      bc.close();
+    };
+  }, []); // fetchAllReservations はローカル関数だが、この用途なら依存無しでOK
+
   // モバイルの半月タブ（前半=1–14 / 後半=15–末）
   type Half = "first" | "second";
   const [mobileHalf, setMobileHalf] = useState<Half>("first");

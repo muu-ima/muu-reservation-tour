@@ -1,14 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import ReservationTable, {
   Reservation,
   Status,
   Program,
   Slot,
 } from "../components/ReservationTable";
-
-
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
@@ -58,6 +56,12 @@ export default function AdminPage() {
   // --- very simple client guard (dev only) ---
   const [authed, setAuthed] = useState(false);
   const [pinInput, setPinInput] = useState("");
+  // 他タブ/他ページへ「予約データが変わった」ことを知らせる
+  const bcRef = useRef<BroadcastChannel | null>(null);
+  useEffect(() => {
+    bcRef.current = new BroadcastChannel("reservations");
+    return () => bcRef.current?.close();
+  }, []);
 
   useEffect(() => {
     if (
@@ -159,6 +163,8 @@ export default function AdminPage() {
   const updateStatus = async (id: number, status: Status) => {
     setError(null);
     setSuccess(null);
+    // 公開側カレンダーへ「状態が変わった」ことを通知（cancelled 等で即座に表示から外れる）
+    bcRef.current?.postMessage({ type: "status", id, status });
     try {
       const res = await fetch(`${API_BASE}/reservations/${id}`, {
         method: "PATCH",
@@ -184,6 +190,8 @@ export default function AdminPage() {
     if (!confirm("この予約を削除しますか？")) return;
     setError(null);
     setSuccess(null);
+    // 公開側カレンダーへ「削除された」ことを通知
+    bcRef.current?.postMessage({ type: "deleted", id });
     try {
       const res = await fetch(`${API_BASE}/reservations/${id}`, {
         method: "DELETE",
