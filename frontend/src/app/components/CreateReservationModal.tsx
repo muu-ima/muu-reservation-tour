@@ -101,7 +101,10 @@ export default function CreateReservationModal({
 
   return (
     <Modal open={open} onClose={onClose} title="見学予約の追加">
-      <div className="max-h-[calc(100dvh-1rem)] md:max-h-[min(85vh,48rem)] overflow-y-auto w-full px-4 pb-6 space-y-3">
+      <div
+        className="max-h-[calc(100dvh-1rem)] md:max-h-[min(85vh,48rem)] 
+                overflow-y-auto w-full max-w-3xl mx-auto px-6 pb-8 space-y-4"
+      >
         <form className="grid grid-cols-1 gap-4" onSubmit={handleSubmit}>
           {/* ステータス表示 */}
           {success && (
@@ -172,6 +175,16 @@ export default function CreateReservationModal({
               />
             </label>
           </div>
+          <Field label="ふりがな（例：たなか たろう）">
+            <input
+              type="text"
+              className="input-soft"
+              value={draft.kana ?? ""}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, kana: e.target.value }))
+              }
+            />
+          </Field>
 
           {/* メール */}
           <label className="text-sm">
@@ -302,4 +315,24 @@ function toDateStr(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="text-sm block">
+      <span className="block mb-1 text-zinc-600">
+        {label}
+        {required ? <span className="text-red-500 ml-0.5">*</span> : null}
+      </span>
+      {children}
+    </label>
+  );
 }

@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ReservationVerifyMail;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ReservationController extends Controller
 {
@@ -66,6 +68,7 @@ class ReservationController extends Controller
                 'slot'    => ['required', Rule::in(['am', 'pm', 'full'])],
                 'last_name' => ['nullable', 'string', 'max:191'],
                 'first_name' => ['nullable', 'string', 'max:191'],
+                'kana' => ['nullable', 'regex:/^[ぁ-んー　\s]+$/u'],
                 'email'     => ['nullable', 'email', 'max:191'],
                 'phone'     => ['nullable', 'string', 'max:32', 'regex:/^[0-9()+\s-]{8,}$/u'],
                 'contact'   => ['nullable', 'string', 'max:191'],
@@ -167,6 +170,7 @@ class ReservationController extends Controller
             'name' => ['sometimes', 'nullable', 'string', 'max:191'],
             'last_name' => ['sometimes', 'nullable', 'string', 'max:191'],
             'first_name' => ['sometimes', 'nullable', 'string', 'max:191'],
+            'kana' => ['sometimes', 'nullable', 'regex:/^[ぁ-んー　\s]+$/u'],
             'email' => ['sometimes', 'nullable', 'email', 'max:191'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:32'],
             'contact' => ['sometimes', 'nullable', 'string', 'max:191'],
@@ -201,6 +205,49 @@ class ReservationController extends Controller
 
         return response()->json($reservation, 200, [], $this->jsonFlags);
     }
+
+/**
+ * PATCH /api/reservations/{reservation}/cancel
+ * 履歴を残しつつ、部分ユニークから外して枠を即時解放する
+ */
+public function cancel(Reservation $reservation)
+{
+    return DB::transaction(function () use ($reservation) {
+
+        // 行ロック付きで最新を取り直す
+        /** @var Reservation $r */
+        $r = Reservation::whereKey($reservation->getKey())
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        // すでに終了系なら冪等にOK返す
+        if (in_array($r->status, ['cancelled', 'done'], true)) {
+            return response()->json([
+                'message' => 'Reservation already finished or cancelled.',
+                'reservation' => $r,
+            ], 200);
+        }
+
+        // キャンセル可能な状態だけ許可
+        if (!in_array($r->status, ['pending', 'booked'], true)) {
+            throw ValidationException::withMessages([
+                'status' => ['This reservation cannot be cancelled from current status.'],
+            ]);
+        }
+
+        // キャンセル → 部分ユニーク条件から外れて枠が自動解放
+        $r->status = 'cancelled';
+        if (in_array('cancelled_at', $r->getFillable(), true)) {
+            $r->cancelled_at = now();
+        }
+        $r->save();
+
+        return response()->json([
+            'message' => 'Reservation cancelled and slot reopened.',
+            'reservation' => $r->refresh(),
+        ], 200);
+    });
+}
 
     public function destroy(Reservation $reservation)
     {

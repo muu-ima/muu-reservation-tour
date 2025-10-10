@@ -56,6 +56,7 @@ export type ReservationCreatePayload = {
     name?: string | null;
     last_name?: string | null;
     first_name?: string | null;
+     kana?: string | null; 
     email?: string | null;
     phone?: string | null;
     notebook_type?: string | null;

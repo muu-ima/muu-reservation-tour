@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models; // ← app/Models 配下なら: namespace App\Models;
+namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,39 +10,63 @@ class Reservation extends Model
 {
     use HasFactory;
 
-    // ★ 一時的に全カラムを一括代入許可
-    protected $guarded = [];
-
-    // 一括代入を許可するカラム
+    /** 一括代入を許可する属性 */
     protected $fillable = [
-        'date', 'program', 'slot', 'name', 'contact', 'note', 'status', 'start_at', 'end_at',
-        'last_name', 'first_name', 'email', 'phone', 'notebook_type', 'has_certificate',
+        'date', 'program', 'slot',
+        'name', 'last_name', 'first_name', 'kana',
+        'email', 'phone', 'contact',
+        'notebook_type', 'has_certificate',
+        'note', 'status',
+        'start_at', 'end_at',
+        'verified_at', 'verify_token', 'verify_expires_at',
+        'cancelled_at',
     ];
 
-    // 便利キャスト（任意）
+    /** キャスト設定 */
     protected $casts = [
-        'date' => 'date:Y-m-d',
-        'start_at' => 'immutable_datetime',
-        'end_at' => 'immutable_datetime',
-        'has_certificate' => 'boolean',
+        'date'              => 'date:Y-m-d',
+        'start_at'          => 'datetime',
+        'end_at'            => 'datetime',
+        'verified_at'       => 'datetime',
+        'verify_expires_at' => 'datetime',
+        'cancelled_at'      => 'datetime',
+        'has_certificate'   => 'boolean',
     ];
 
-    protected static function booted()
+    /** ステータス定義 */
+    public const STATUS_PENDING   = 'pending';
+    public const STATUS_BOOKED    = 'booked';
+    public const STATUS_DONE      = 'done';
+    public const STATUS_CANCELLED = 'cancelled';
+
+    /** スロット定義（am/pm のみ） */
+    public const SLOT_AM = 'am';
+    public const SLOT_PM = 'pm';
+
+    /** 有効枠（予約占有状態）判定 */
+    public function getIsActiveAttribute(): bool
+    {
+        return in_array($this->status, [self::STATUS_PENDING, self::STATUS_BOOKED], true);
+    }
+
+    /** 日付・スロット変更時に start_at / end_at を JST→UTC に再計算 */
+    protected static function booted(): void
     {
         static::saving(function (Reservation $r) {
-            // ステータス等だけの更新なら、時刻をいじらない
-            if (! $r->isDirty('date') && ! $r->isDirty('slot')) {
-                return;
-            }
-            if (! $r->date || ! $r->slot) {
-                return;
-            }
+            if (! $r->isDirty('date') && ! $r->isDirty('slot')) return;
+            if (! $r->date || ! $r->slot) return;
 
-            $slotStart = ['am' => '10:00:00', 'pm' => '14:00:00', 'full' => '10:00:00'];
-            $slotEnd = ['am' => '12:00:00', 'pm' => '16:00:00', 'full' => '16:00:00'];
+            // am / pm だけの時間帯設定
+            $slotStart = [
+                self::SLOT_AM => '10:00:00',
+                self::SLOT_PM => '13:00:00',
+            ];
+            $slotEnd = [
+                self::SLOT_AM => '12:00:00',
+                self::SLOT_PM => '15:00:00',
+            ];
 
-            // casts 済みなので常に "Y-m-d" に正規化してから結合
-            $dateStr = $r->date instanceof Carbon ? $r->date->toDateString() : (string) $r->date;
+            $dateStr = $r->date instanceof Carbon ? $r->date->toDateString() : (string)$r->date;
             $tz = 'Asia/Tokyo';
 
             if (isset($slotStart[$r->slot])) {
