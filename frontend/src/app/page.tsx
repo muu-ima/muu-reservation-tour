@@ -74,8 +74,18 @@ function formatMonthJP(d: Date) {
   return `${d.getFullYear()}年${d.getMonth() + 1}月`;
 }
 
-// === 共通タイプ（reduce 用） ===
-type SlotCounts = Record<Slot, number>;
+// === 共通タイプ（reduce 用）: am/pm のみ ===
+type SlotCounts = { am: number; pm: number };
+
+/** Slot が 'am' | 'pm' かを絞り込む */
+function isAmPm(x: unknown): x is "am" | "pm" {
+  return x === "am" || x === "pm";
+}
+
+/** Status が 'cancelled' かを絞り込む（型不一致を回避） */
+function isCancelled(x: unknown): x is "cancelled" {
+  return x === "cancelled";
+}
 
 export default function Page() {
   // ===== State
@@ -369,11 +379,12 @@ export default function Page() {
     }
   };
 
-  // ===== カレンダー用: 当月の予約を日付ごとに集計（常に tour のみ）
+  // ===== カレンダー用: 当月の予約を日付ごとに集計（tour のみ / cancelled は除外）
   const dayMap = useMemo(() => {
     const map: Record<string, Reservation[]> = {};
     (allItems ?? []).forEach((r) => {
       if (r.program !== "tour") return;
+      if (isCancelled(r.status)) return; // 👈 キャンセルは描画対象から除外
       const ds = toDateStr(r.date);
       if (ds.startsWith(monthKey)) (map[ds] ||= []).push(r);
     });
@@ -482,8 +493,11 @@ export default function Page() {
               {monthCells.map((cell, i) => {
                 const dayItems = dayMap[cell.dateStr] ?? [];
                 const counts = dayItems.reduce<SlotCounts>(
-                  (acc, r) => ({ ...acc, [r.slot]: (acc[r.slot] ?? 0) + 1 }),
-                  { am: 0, pm: 0, full: 0 }
+                  (acc, r) => {
+                    if (isAmPm(r.slot)) acc[r.slot] = acc[r.slot] + 1;
+                    return acc;
+                  },
+                  { am: 0, pm: 0 }
                 );
                 const total = dayItems.length;
                 const isToday = cell.dateStr === toDateStr(new Date());
@@ -541,11 +555,6 @@ export default function Page() {
                     </div>
 
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {counts.full > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
-                          FULL×{counts.full}
-                        </span>
-                      )}
                       {counts.am > 0 && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
                           AM×{counts.am}
@@ -666,12 +675,12 @@ export default function Page() {
                 <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden bg-white">
                   {windowCells.map((cell) => {
                     const dayItems = dayMap[cell.dateStr] ?? [];
-                    const counts = dayItems.reduce<Record<Slot, number>>(
-                      (acc, r) => ({
-                        ...acc,
-                        [r.slot]: (acc[r.slot] ?? 0) + 1,
-                      }),
-                      { am: 0, pm: 0, full: 0 }
+                    const counts = dayItems.reduce<SlotCounts>(
+                      (acc, r) => {
+                        if (isAmPm(r.slot)) acc[r.slot] = acc[r.slot] + 1;
+                        return acc;
+                      },
+                      { am: 0, pm: 0 }
                     );
                     const total = dayItems.length;
                     const isToday = cell.dateStr === toDateStr(new Date());
@@ -724,11 +733,6 @@ export default function Page() {
                                 </span>
                               )}
                               <div className="flex flex-wrap gap-1">
-                                {counts.full > 0 && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
-                                    FULL×{counts.full}
-                                  </span>
-                                )}
                                 {counts.am > 0 && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
                                     AM×{counts.am}
