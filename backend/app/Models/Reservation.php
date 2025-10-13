@@ -37,7 +37,7 @@ class Reservation extends Model
     public const STATUS_PENDING   = 'pending';
     public const STATUS_BOOKED    = 'booked';
     public const STATUS_DONE      = 'done';
-    public const STATUS_CANCELLED = 'cancelled';
+    public const STATUS_CANCELED = 'canceled';
 
     /** スロット定義（am/pm のみ） */
     public const SLOT_AM = 'am';
