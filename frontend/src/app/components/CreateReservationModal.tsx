@@ -9,7 +9,6 @@ type Props = {
   initialSlot?: Slot;
   onClose: () => void;
   onSubmit: (payload: ReservationCreatePayload) => Promise<void>;
-  submitting: boolean;
 };
 
 const emptyDraft: ReservationCreatePayload = {
