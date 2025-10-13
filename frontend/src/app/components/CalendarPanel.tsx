@@ -11,7 +11,15 @@ import { getErrorMessage } from "@/types/reservation";
 import CreateReservationModal from "@/components/CreateReservationModal";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatIcon from "@/components/ChatIcon";
+import {
+  toDateStr,
+  isWeekendStr,
+  nextBusinessDay,
+  nextBusinessDayFromStr, 
+  formatMonthJP,          
+} from "@/lib/dateUtils";
 
+import { buildMonthCells } from "@/lib/calendarUtils";
 // ============================================
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
 // ※ UIを「見学（tour）専用」に整理。体験（experience）関連UIは撤去。
@@ -20,59 +28,6 @@ import ChatIcon from "@/components/ChatIcon";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
   "https://muu-reservation-tour.onrender.com/api";
-
-// ========= 日付ユーティリティ =========
-const toDateStr = (d: string | Date) => {
-  if (typeof d === "string") return d.slice(0, 10);
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 10);
-};
-
-// === 休業日（週末）ユーティリティ ===
-function dayOfWeekFromStr(s: string): number {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d).getDay(); // 0=日,6=土
-}
-function isWeekendStr(s: string): boolean {
-  const dow = dayOfWeekFromStr(s);
-  return dow === 0 || dow === 6;
-}
-function nextBusinessDay(from: Date = new Date()): string {
-  const dt = new Date(from);
-  while (dt.getDay() === 0 || dt.getDay() === 6) dt.setDate(dt.getDate() + 1);
-  return toDateStr(dt);
-}
-function nextBusinessDayFromStr(s: string): string {
-  const [y, m, d] = s.split("-").map(Number);
-  return nextBusinessDay(new Date(y, m - 1, d));
-}
-
-// === 月セル生成 ===
-function buildMonthCells(cursor: Date, mondayStart = true) {
-  const y = cursor.getFullYear();
-  const m = cursor.getMonth(); // 0-11
-  const first = new Date(y, m, 1);
-  const firstDow = first.getDay(); // 0=Sun
-  const startOffset = (firstDow - (mondayStart ? 1 : 0) + 7) % 7; // 月起点
-  const gridStart = new Date(y, m, 1 - startOffset);
-  const cells = Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(gridStart);
-    d.setDate(gridStart.getDate() + i);
-    return {
-      dateStr: toDateStr(d),
-      inMonth: d.getMonth() === m,
-      y: d.getFullYear(),
-      m: d.getMonth(),
-      day: d.getDate(),
-    };
-  });
-  return cells;
-}
-
-function formatMonthJP(d: Date) {
-  return `${d.getFullYear()}年${d.getMonth() + 1}月`;
-}
 
 // === 共通タイプ（reduce 用）: am/pm のみ ===
 type SlotCounts = { am: number; pm: number };

@@ -32,7 +32,6 @@ Route::middleware([DevCors::class])->group(function () {
     Route::patch('/reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])
         ->name('reservations.cancel');
 
-
     // ヘルスチェック
     Route::get('/healthz', function () {
         return response()->json([
