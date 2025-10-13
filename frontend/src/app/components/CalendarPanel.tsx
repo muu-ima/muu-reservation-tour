@@ -1,21 +1,14 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  Reservation,
-  Slot,
-  ReservationFilterUI,
-  ReservationCreatePayload,
-} from "@/types/reservation";
-import { getErrorMessage } from "@/types/reservation";
+import { useReservations } from "@/hooks/useReservations";
+import type { Reservation, Slot } from "@/types/reservation";
 import CreateReservationModal from "@/components/CreateReservationModal";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatIcon from "@/components/ChatIcon";
 import {
   toDateStr,
   isWeekendStr,
-  nextBusinessDay,
-  nextBusinessDayFromStr, 
   formatMonthJP,          
 } from "@/lib/dateUtils";
 
@@ -43,30 +36,20 @@ function isCancelled(x: unknown): x is "cancelled" {
 }
 
 export default function CalendarPanel() {
-  // ===== State
-  const [items, setItems] = useState<Reservation[] | null>(null); // 作成時のpush用に温存
-  const [allItems, setAllItems] = useState<Reservation[] | null>(null); // カレンダー用（全体）
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  // 管理画面からの変更通知を受けて、全件を取り直す
-  useEffect(() => {
-    const bc = new BroadcastChannel("reservations");
-    const onMsg = (ev: MessageEvent) => {
-      const t = ev.data?.type as string | undefined;
-      if (t === "deleted" || t === "status") {
-        // 同月内の変化はもちろん、月をまたぐ削除も拾えるよう全件を再取得
-        fetchAllReservations();
-      }
-    };
-    bc.addEventListener("message", onMsg);
-    return () => {
-      bc.removeEventListener("message", onMsg);
-      bc.close();
-    };
-  }, []); // fetchAllReservations はローカル関数だが、この用途なら依存無しでOK
+ // ===== State
+const {
+  allItems,
+  loading,
+  error,
+  success,
+  filter,
+  setFilter,
+  fetchReservations,
+  fetchAllReservations,
+  createReservation,
+  isBookable,
+  getSafeCreateDate,
+} = useReservations();
 
   // モバイルの半月タブ（前半=1–14 / 後半=15–末）
   type Half = "first" | "second";
@@ -78,14 +61,7 @@ export default function CalendarPanel() {
   // 表示窓：前半 1〜14日（14日分）、後半 15日〜月末（残り全部）
   const MOBILE_WINDOW_DAYS = 14;
 
-  // 絞り込み（一覧用）
-  const [filter, setFilter] = useState<ReservationFilterUI>(() => ({
-    date: "",
-    program: "", // ← バックエンド互換のためプロパティだけ残す
-    slot: "",
-  }));
-
-  // カレンダー: 表示中の月（1日固定）
+   // カレンダー: 表示中の月（1日固定）
   const [calCursor, setCalCursor] = useState(() => {
     const d = new Date();
     d.setDate(1);
@@ -103,37 +79,16 @@ export default function CalendarPanel() {
   const [createDate, setCreateDate] = useState<string | undefined>(undefined);
   const [createSlot, setCreateSlot] = useState<Slot | undefined>(undefined);
 
-  // 受付可否マップ: { "YYYY-MM-DD": true|false }（未設定はtrue扱い）
-  const [availabilityMap, setAvailabilityMap] = useState<
-    Record<string, boolean>
-  >({});
-
-  // 「明日」（JST運用前提で日付文字列比較）
-  const tomorrow = useMemo(() => {
-    const t = new Date();
-    t.setDate(t.getDate() + 1);
-    return toDateStr(t);
-  }, []);
-
-  // === 予約可能か（明日以降・平日・管理側でOFFでない）
-  function isBookable(dateStr: string) {
-    const isPastOrToday = new Date(dateStr) < new Date(tomorrow);
-    const adminOpen = availabilityMap[dateStr] ?? true; // undefinedは開放
-    return !isPastOrToday && !isWeekendStr(dateStr) && adminOpen;
+function openCreate(dateStr?: string, slot?: Slot) {
+  const safe = getSafeCreateDate(dateStr);
+  if (!isBookable(safe)) {
+    alert("本日以前や土日・停止日には予約を追加できません。");
+    return;
   }
-
-  function openCreate(dateStr?: string, slot?: Slot) {
-    const init = dateStr ?? nextBusinessDay();
-    const safe = isWeekendStr(init) ? nextBusinessDayFromStr(init) : init;
-
-    if (!isBookable(safe)) {
-      alert("本日以前や土日・停止日には予約を追加できません。");
-      return;
-    }
-    setCreateDate(safe);
-    setCreateSlot(slot);
-    setIsCreateOpen(true);
-  }
+  setCreateDate(safe);
+  setCreateSlot(slot);
+  setIsCreateOpen(true);
+}
 
   // 月境界ユーティリティ
   const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
@@ -184,172 +139,17 @@ export default function CalendarPanel() {
     setTouchStart(null);
   };
 
-  // ===== API =====
-  const buildQuery = () => {
-    const params = new URLSearchParams();
-    if (filter.date) params.set("date", filter.date);
-    if (filter.slot) params.set("slot", filter.slot);
-    const qs = params.toString();
-    return qs ? `?${qs}` : "";
-  };
 
-  const fetchReservations = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/reservations${buildQuery()}`, {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`GET /reservations failed: ${res.status}`);
-      const data: Reservation[] = await res.json();
-      setItems(data); // 一覧としては使っていないが作成時のpushで利用
-    } catch (e: unknown) {
-      setError(getErrorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const fetchAllReservations = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/reservations`, {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`GET /reservations failed: ${res.status}`);
-      const data: Reservation[] = await res.json();
-      setAllItems(data);
-    } catch (e: unknown) {
-      console.warn("fetchAllReservations:", getErrorMessage(e));
-    }
-  };
-
-  const fetchAvailability = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/availability`, {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      });
-      if (!res.ok) return;
-      const js = (await res.json()) as Record<string, boolean>;
-      setAvailabilityMap(js || {});
-    } catch {}
-  };
-
-  // 初回ロード
-  useEffect(() => {
-    fetchReservations();
-    fetchAllReservations();
-    fetchAvailability();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // 月が変わるたび再フェッチ
-  useEffect(() => {
-    fetchAllReservations();
-  }, [monthKey]);
+useEffect(() => {
+  fetchAllReservations(); // ← hook から取得した関数
+}, [monthKey, fetchAllReservations]);
 
   // filter 変更で一覧再取得
   useEffect(() => {
     fetchReservations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter.date, filter.slot]);
-
-  // ====== 新規作成（モーダルから呼ぶ）
-
-  // 1) 先頭 or 関数外にユーティリティを用意（any不使用）
-  function safeMessage(x: unknown): string | undefined {
-    if (x && typeof x === "object") {
-      const rec = x as Record<string, unknown>;
-      const m = rec["message"];
-      if (typeof m === "string") return m;
-    }
-    return undefined;
-  }
-
-  function isReservation(x: unknown): x is Reservation {
-    if (!x || typeof x !== "object") return false;
-    const r = x as Partial<Reservation>;
-    // 最低限のフィールドでバリデーション（必要に応じて厳しく）
-    return typeof r === "object" && r !== null && "status" in (r as object);
-  }
-
-  const createReservation = async (payload: ReservationCreatePayload) => {
-    setSubmitting(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      if (!payload.date) throw new Error("日付を入力してください");
-
-      const composedName =
-        (payload.name && payload.name.trim()) ||
-        `${payload.last_name ?? ""}${
-          payload.first_name ? ` ${payload.first_name}` : ""
-        }`.trim() ||
-        "ゲスト";
-
-      const body = { ...payload, name: composedName, program: "tour" };
-
-      const res = await fetch(`${API_BASE}/reservations`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      // JSONが返らないケースに備えて unknown で受ける
-      let js: unknown = null;
-      try {
-        js = await res.json();
-      } catch {
-        // 何もしない（js は null のまま）
-      }
-
-      if (res.status === 409) {
-        throw new Error(
-          safeMessage(js) ??
-            "その日時は仮予約/確定済みです。別の枠を選んでください。"
-        );
-      }
-
-      if (res.status === 422) {
-        throw new Error(
-          safeMessage(js) ??
-            "入力内容に誤りがあります。必須項目・形式をご確認ください。"
-        );
-      }
-
-      if (!res.ok) {
-        throw new Error(
-          safeMessage(js) ??
-            `予約の作成に失敗しました（${res.status}）。時間をおいて再度お試しください。`
-        );
-      }
-
-      // 201: 正常ケース。型ガードで確認してから使う
-      if (!isReservation(js)) {
-        throw new Error("サーバー応答の形式が不正です。");
-      }
-
-      // 201 Created
-      const created: Reservation = js;
-      setSuccess("仮予約を作成しました。確認メールをご確認ください。");
-      setItems((prev) => (prev ? [created, ...prev] : [created]));
-      setAllItems((prev) => (prev ? [created, ...prev] : [created]));
-      setFilter((f) => ({
-        ...f,
-        date: toDateStr(created.date ?? payload.date),
-      }));
-      setIsCreateOpen(false);
-    } catch (e: unknown) {
-      setError(getErrorMessage(e));
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   // ===== カレンダー用: 当月の予約を日付ごとに集計（tour のみ / cancelled は除外）
   const dayMap = useMemo(() => {

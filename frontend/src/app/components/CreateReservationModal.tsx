@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Modal from "@/components/Modal";
 import type { ReservationCreatePayload, Slot } from "@/types/reservation";
 import { getErrorMessage } from "@/types/reservation";
@@ -9,6 +9,7 @@ type Props = {
   initialSlot?: Slot;
   onClose: () => void;
   onSubmit: (payload: ReservationCreatePayload) => Promise<void>;
+  submitting: boolean;
 };
 
 const emptyDraft: ReservationCreatePayload = {
@@ -18,6 +19,7 @@ const emptyDraft: ReservationCreatePayload = {
   name: "",
   last_name: "",
   first_name: "",
+  kana:"",
   email: "",
   phone: "",
   notebook_type: "",
@@ -37,6 +39,7 @@ export default function CreateReservationModal({
   const [confirmChecked, setConfirmChecked] = useState<boolean>(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const submitGuardRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -50,52 +53,53 @@ export default function CreateReservationModal({
     }
   }, [open, initialDate, initialSlot]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    if (!form.reportValidity()) return;
+const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  if (!form.reportValidity()) return;
 
-    const nilIfEmpty = (v?: string | null) => {
-      const s = (v ?? "").trim();
-      return s === "" ? null : s;
-    };
-    const toAsciiPhone = (s?: string | null) => {
-      const t = (s ?? "").trim();
-      if (!t) return null;
-      return t
-        .replace(/[０-９]/g, (d) =>
-          String.fromCharCode(d.charCodeAt(0) - 0xfee0)
-        )
-        .trim();
-    };
+  // ★ 二重送信ブロック：実行中なら即 return
+  if (submitGuardRef.current || loading) return;
+  submitGuardRef.current = true;
 
-    const payload: ReservationCreatePayload = {
-      date: draft.date,
-      program: "tour",
-      slot: draft.slot,
-      name: nilIfEmpty(draft.name),
-      last_name: nilIfEmpty(draft.last_name),
-      first_name: nilIfEmpty(draft.first_name),
-      kana: nilIfEmpty(draft.kana),
-      email: nilIfEmpty(draft.email),
-      phone: toAsciiPhone(draft.phone),
-      notebook_type: nilIfEmpty(draft.notebook_type),
-      has_certificate: !!draft.has_certificate,
-      note: nilIfEmpty(draft.note),
-    };
-
-    setLoading(true);
-    setError(null);
-    try {
-      await onSubmit(payload);
-      setSuccess("予約を送信しました。");
-      setTimeout(() => onClose(), 1200);
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
+  const nilIfEmpty = (v?: string | null) => {
+    const s = (v ?? "").trim();
+    return s === "" ? null : s;
   };
+  const toAsciiPhone = (s?: string | null) => {
+    const t = (s ?? "").trim();
+    if (!t) return null;
+    return t.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)).trim();
+  };
+
+  const payload: ReservationCreatePayload = {
+    date: draft.date,
+    program: "tour",
+    slot: draft.slot,
+    name: nilIfEmpty(draft.name),
+    last_name: nilIfEmpty(draft.last_name),
+    first_name: nilIfEmpty(draft.first_name),
+    kana: nilIfEmpty(draft.kana),
+    email: nilIfEmpty(draft.email),
+    phone: toAsciiPhone(draft.phone),
+    notebook_type: nilIfEmpty(draft.notebook_type),
+    has_certificate: !!draft.has_certificate,
+    note: nilIfEmpty(draft.note),
+  };
+
+  setLoading(true);
+  setError(null);
+  try {
+    await onSubmit(payload);
+    setSuccess("予約を送信しました。");
+    setTimeout(() => onClose(), 1200);
+  } catch (err) {
+    setError(getErrorMessage(err));
+  } finally {
+    setLoading(false);
+    submitGuardRef.current = false; // ★ 忘れずに解除
+  }
+};
 
   return (
     <Modal open={open} onClose={onClose} title="見学予約の追加">
@@ -209,7 +213,7 @@ export default function CreateReservationModal({
               name="phone"
               inputMode="tel"
               autoComplete="tel"
-              pattern="[0-9+\-() ]*"
+              pattern="^[0-9()\\-\\s]+$"
               className="w-full rounded-lg border px-3 py-1.5 focus:ring-2 focus:ring-blue-400"
               value={draft.phone ?? ""}
               onChange={(e) =>
@@ -279,6 +283,7 @@ export default function CreateReservationModal({
             <button
               type="submit"
               disabled={loading || !confirmChecked}
+              aria-busy={loading}
               className="w-full sm:flex-1 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold
                 hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
                 disabled:opacity-60 flex items-center justify-center gap-2"
