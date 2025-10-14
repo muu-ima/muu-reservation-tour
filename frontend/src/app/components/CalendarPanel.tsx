@@ -6,11 +6,7 @@ import type { Reservation, Slot } from "@/types/reservation";
 import CreateReservationModal from "@/components/CreateReservationModal";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatIcon from "@/components/ChatIcon";
-import {
-  toDateStr,
-  isWeekendStr,
-  formatMonthJP,          
-} from "@/lib/dateUtils";
+import { toDateStr, isWeekendStr, formatMonthJP } from "@/lib/dateUtils";
 
 import { buildMonthCells } from "@/lib/calendarUtils";
 // ============================================
@@ -36,20 +32,20 @@ function isCancelled(x: unknown): x is "cancelled" {
 }
 
 export default function CalendarPanel() {
- // ===== State
-const {
-  allItems,
-  loading,
-  error,
-  success,
-  filter,
-  setFilter,
-  fetchReservations,
-  fetchAllReservations,
-  createReservation,
-  isBookable,
-  getSafeCreateDate,
-} = useReservations();
+  // ===== State
+  const {
+    allItems,
+    loading,
+    error,
+    success,
+    filter,
+    setFilter,
+    fetchReservations,
+    fetchAllReservations,
+    createReservation,
+    isBookable,
+    getSafeCreateDate,
+  } = useReservations();
 
   // モバイルの半月タブ（前半=1–14 / 後半=15–末）
   type Half = "first" | "second";
@@ -61,7 +57,7 @@ const {
   // 表示窓：前半 1〜14日（14日分）、後半 15日〜月末（残り全部）
   const MOBILE_WINDOW_DAYS = 14;
 
-   // カレンダー: 表示中の月（1日固定）
+  // カレンダー: 表示中の月（1日固定）
   const [calCursor, setCalCursor] = useState(() => {
     const d = new Date();
     d.setDate(1);
@@ -79,16 +75,16 @@ const {
   const [createDate, setCreateDate] = useState<string | undefined>(undefined);
   const [createSlot, setCreateSlot] = useState<Slot | undefined>(undefined);
 
-function openCreate(dateStr?: string, slot?: Slot) {
-  const safe = getSafeCreateDate(dateStr);
-  if (!isBookable(safe)) {
-    alert("本日以前や土日・停止日には予約を追加できません。");
-    return;
+  function openCreate(dateStr?: string, slot?: Slot) {
+    const safe = getSafeCreateDate(dateStr);
+    if (!isBookable(safe)) {
+      alert("本日以前や土日・停止日には予約を追加できません。");
+      return;
+    }
+    setCreateDate(safe);
+    setCreateSlot(slot);
+    setIsCreateOpen(true);
   }
-  setCreateDate(safe);
-  setCreateSlot(slot);
-  setIsCreateOpen(true);
-}
 
   // 月境界ユーティリティ
   const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
@@ -139,11 +135,9 @@ function openCreate(dateStr?: string, slot?: Slot) {
     setTouchStart(null);
   };
 
-
-
-useEffect(() => {
-  fetchAllReservations(); // ← hook から取得した関数
-}, [monthKey, fetchAllReservations]);
+  useEffect(() => {
+    fetchAllReservations(); // ← hook から取得した関数
+  }, [monthKey, fetchAllReservations]);
 
   // filter 変更で一覧再取得
   useEffect(() => {
@@ -167,10 +161,14 @@ useEffect(() => {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-<header className="sticky top-0 z-30 -mx-6 mb-4 px-6 py-3
+        <header
+          className="sticky top-0 z-30 -mx-6 mb-4 px-6 py-3
                    backdrop-blur supports-[backdrop-filter]:bg-white/75
                    bg-white/90 dark:bg-black/30 border-b border-[var(--border)]
-                   flex items-center justify-between gap-3">          <h1 className="text-2xl md:text-3xl font-semibold">予約カレンダー</h1>
+                   flex items-center justify-between gap-3"
+        >
+          {" "}
+          <h1 className="text-2xl md:text-3xl font-semibold">予約カレンダー</h1>
           <div className="flex items-center gap-2">
             <button
               onClick={fetchReservations}

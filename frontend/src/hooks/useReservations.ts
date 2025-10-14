@@ -114,7 +114,9 @@ export function useReservations() {
   // ===== State
   const [items, setItems] = useState<Reservation[] | null>(null); // 一覧（作成直後 push 用にも利用）
   const [allItems, setAllItems] = useState<Reservation[] | null>(null); // カレンダー用の全件
-  const [availabilityMap, setAvailabilityMap] = useState<Record<string, boolean>>({});
+  const [availabilityMap, setAvailabilityMap] = useState<
+    Record<string, boolean>
+  >({});
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,7 +154,7 @@ export function useReservations() {
     return isWeekendStr(init) ? nextBusinessDayFromStr(init) : init;
   };
 
-    // ---- APIからの予約エンティティを正規化（cancelled→canceled など）
+  // ---- APIからの予約エンティティを正規化（cancelled→canceled など）
   const normalizeItem = (r: Reservation): Reservation => ({
     ...r,
     status: r.status ? normalizeStatus(r.status) : r.status,
@@ -258,15 +260,22 @@ export function useReservations() {
           "ゲスト";
 
         // 見学（tour）専用UIのため program を固定
-        const body = { ...payload, name: composedName, program: "tour" as const };
+        const body = {
+          ...payload,
+          name: composedName,
+          program: "tour" as const,
+        };
 
         const created = await apiPost<Reservation>("/reservations", body);
 
         setSuccess("仮予約を作成しました。確認メールをご確認ください。");
- const normalized = normalizeItem(created);
-      setItems((prev) => (prev ? [normalized, ...prev] : [normalized]));
-      setAllItems((prev) => (prev ? [normalized, ...prev] : [normalized]));        
-      setFilter((f) => ({ ...f, date: toDateStr(created.date ?? payload.date) }));
+        const normalized = normalizeItem(created);
+        setItems((prev) => (prev ? [normalized, ...prev] : [normalized]));
+        setAllItems((prev) => (prev ? [normalized, ...prev] : [normalized]));
+        setFilter((f) => ({
+          ...f,
+          date: toDateStr(created.date ?? payload.date),
+        }));
       } catch (e) {
         setError(getErrorMessage(e));
       } finally {
@@ -275,6 +284,33 @@ export function useReservations() {
     },
     []
   );
+
+  // ← 返り値(return {...})の直前に追加
+  useEffect(() => {
+    // 分境界に合わせて開始 → 以後 60s ごとに再取得
+    const align = 60_000 - (Date.now() % 60_000);
+    let intervalId: number | undefined;
+    const start = window.setTimeout(() => {
+      fetchAllReservations(); // 開始時に一度
+      intervalId = window.setInterval(() => {
+        fetchAllReservations();
+      }, 60_000);
+    }, align);
+
+    // タブ復帰/フォーカスで即再取得
+    const onVisible = () => {
+      if (!document.hidden) fetchAllReservations();
+    };
+    window.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      window.clearTimeout(start);
+      if (intervalId) window.clearInterval(intervalId);
+      window.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [fetchAllReservations]);
 
   return {
     // state
