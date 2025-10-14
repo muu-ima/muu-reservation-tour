@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
  import ReservationTable from "../components/ReservationTable";
  import type { Reservation, Status, Program, Slot } from "@/types/reservation";
 
@@ -94,46 +94,88 @@ export default function AdminPage() {
   const [selectedDate, setSelectedDate] = useState<string>(fmtDate(new Date()));
 
   const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
-  const fetchReservations = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/reservations`, {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`GET /reservations failed: ${res.status}`);
-      // APIが型どおり返す前提で unknown → Reservation[] にキャスト
-      const data = (await res.json()) as unknown as Reservation[];
-      setItems(data);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+// 1) fetch 関数を useCallback で安定化
+const fetchReservations = useCallback(async () => {
+  setLoading(true);
+  setError(null);
+  try {
+    const res = await fetch(`${API_BASE}/reservations`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`GET /reservations failed: ${res.status}`);
+    const data = (await res.json()) as unknown as Reservation[];
+    setItems(data);
+  } catch (e: unknown) {
+    setError(e instanceof Error ? e.message : String(e));
+  } finally {
+    setLoading(false);
+  }
+}, []); // ←依存なし（API_BASE は外側 const で不変）
+
+const fetchAvailability = useCallback(async () => {
+  try {
+    const res = await fetch(`${API_BASE}/availability`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return;
+    const js = (await res.json()) as AvailabilityMap;
+    setAvailabilityMap(js || {});
+  } catch {}
+}, []);
+
+
+// 2) 認証後の初回ロード（既存のままでOK）
+useEffect(() => {
+  if (authed) {
+    fetchReservations();
+    fetchAvailability();
+  }
+}, [authed, fetchReservations, fetchAvailability]);
+
+// 3) ★ 新規：ポーリング用 useEffect（初回ロードのすぐ下あたりに追加）
+useEffect(() => {
+  if (!authed) return;
+
+  // 分境界に合わせて開始 → 以後 60s ごとに更新
+  const align = 60_000 - (Date.now() % 60_000);
+  let intervalId: number | undefined;
+
+  const tick = () => {
+    // 安定化した関数参照を呼ぶ
+    fetchReservations();
+    fetchAvailability();
   };
 
-  // 認証後の初回ロード時に取得
-  useEffect(() => {
-    if (authed) {
-      fetchReservations();
-      fetchAvailability();
-    }
-  }, [authed]);
+  const start = window.setTimeout(() => {
+    tick(); // 開始時にも一回
+    intervalId = window.setInterval(tick, 60_000);
+  }, align);
 
-  // API呼び出し（他のfetch群の近くに追記）
-  const fetchAvailability = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/availability`, {
-        headers: { Accept: "application/json" },
-        cache: "no-store",
-      });
-      if (!res.ok) return;
-      const js = (await res.json()) as AvailabilityMap;
-      setAvailabilityMap(js || {});
-    } catch {}
+  // タブ復帰・フォーカスで即時更新
+  const onVisible = () => {
+    if (!document.hidden) tick();
   };
+  window.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onVisible);
+
+  // BroadcastChannel 受信で即時更新（他タブ更新の反映）
+  const bc = bcRef.current;
+  const onBC = (ev: MessageEvent<{ type?: string }>) => {
+    const t = ev.data?.type ?? "";
+    if (t === "deleted" || t === "status") tick();
+  };
+  bc?.addEventListener("message", onBC);
+
+  return () => {
+    window.clearTimeout(start);
+    if (intervalId) window.clearInterval(intervalId);
+    window.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("focus", onVisible);
+    bc?.removeEventListener("message", onBC);
+  };
+}, [authed, fetchReservations, fetchAvailability]);
 
   const updateAvailability = async (dateStr: string, open: boolean) => {
     try {

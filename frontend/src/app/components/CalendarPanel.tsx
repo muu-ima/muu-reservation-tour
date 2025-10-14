@@ -26,10 +26,7 @@ function isAmPm(x: unknown): x is "am" | "pm" {
   return x === "am" || x === "pm";
 }
 
-/** Status が 'cancelled' かを絞り込む（型不一致を回避） */
-function isCancelled(x: unknown): x is "cancelled" {
-  return x === "cancelled";
-}
+const isCanceled = (s?: Reservation["status"]) => s === "canceled";
 
 export default function CalendarPanel() {
   // ===== State
@@ -150,7 +147,7 @@ export default function CalendarPanel() {
     const map: Record<string, Reservation[]> = {};
     (allItems ?? []).forEach((r) => {
       if (r.program !== "tour") return;
-      if (isCancelled(r.status)) return; // 👈 キャンセルは描画対象から除外
+      if (isCanceled(r.status)) return; // 👈 キャンセルは描画対象から除外
       const ds = toDateStr(r.date);
       if (ds.startsWith(monthKey)) (map[ds] ||= []).push(r);
     });
