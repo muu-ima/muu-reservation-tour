@@ -167,8 +167,10 @@ useEffect(() => {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <header className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl md:text-3xl font-semibold">予約カレンダー</h1>
+<header className="sticky top-0 z-30 -mx-6 mb-4 px-6 py-3
+                   backdrop-blur supports-[backdrop-filter]:bg-white/75
+                   bg-white/90 dark:bg-black/30 border-b border-[var(--border)]
+                   flex items-center justify-between gap-3">          <h1 className="text-2xl md:text-3xl font-semibold">予約カレンダー</h1>
           <div className="flex items-center gap-2">
             <button
               onClick={fetchReservations}
@@ -297,7 +299,7 @@ useEffect(() => {
                     tabIndex={0}
                     onClick={onCellClick}
                     className={[
-                      "relative h-24 rounded-xl border p-2 text-left transition",
+                      "relative h-28 rounded-xl border p-2 text-left transition",
                       cell.inMonth ? "bg-white" : "bg-gray-50",
                       isToday ? "ring-2 ring-blue-500" : "hover:shadow-sm",
                     ].join(" ")}
