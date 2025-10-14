@@ -24,6 +24,8 @@ class Kernel extends ConsoleKernel
     protected function schedule(\Illuminate\Console\Scheduling\Schedule $schedule): void
     {
         $schedule->command('reservations:cancel-expired-pending')->everyFiveMinutes();
+
+        $schedule->command('reservations:mark-booked-done')->everyFiveMinutes();
     }
 
     /**

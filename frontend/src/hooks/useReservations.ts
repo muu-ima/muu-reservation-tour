@@ -14,6 +14,7 @@ import {
   nextBusinessDay,
   nextBusinessDayFromStr,
 } from "@/lib/dateUtils";
+import { normalizeStatus } from "@/types/reservation";
 
 // ---- 型（any禁止対策）
 type BCtor = new (name: string) => BroadcastChannel;
@@ -151,6 +152,12 @@ export function useReservations() {
     return isWeekendStr(init) ? nextBusinessDayFromStr(init) : init;
   };
 
+    // ---- APIからの予約エンティティを正規化（cancelled→canceled など）
+  const normalizeItem = (r: Reservation): Reservation => ({
+    ...r,
+    status: r.status ? normalizeStatus(r.status) : r.status,
+  });
+
   // ===== API 呼び出し群
 
   // 一覧取得：filter 依存 & 前回リクエストを abort（429抑止）
@@ -169,7 +176,7 @@ export function useReservations() {
         { date: filter.date, slot: filter.slot || undefined },
         ctrl.signal
       );
-      setItems(data);
+      setItems(data.map(normalizeItem));
     } catch (e) {
       if ((e as Error).name !== "AbortError") setError(getErrorMessage(e));
     } finally {
@@ -181,7 +188,7 @@ export function useReservations() {
   const fetchAllReservations = useCallback(async () => {
     try {
       const data = await apiGet<Reservation[]>("/reservations");
-      setAllItems(data);
+      setAllItems(data.map(normalizeItem));
     } catch (e) {
       console.warn("fetchAllReservations:", getErrorMessage(e));
     }
@@ -223,6 +230,7 @@ export function useReservations() {
         bc.removeEventListener("message", onMsg);
         bc.close();
         if (timer) window.clearTimeout(timer);
+        listAbortRef.current?.abort();
       };
     }
     return;
@@ -255,9 +263,10 @@ export function useReservations() {
         const created = await apiPost<Reservation>("/reservations", body);
 
         setSuccess("仮予約を作成しました。確認メールをご確認ください。");
-        setItems((prev) => (prev ? [created, ...prev] : [created]));
-        setAllItems((prev) => (prev ? [created, ...prev] : [created]));
-        setFilter((f) => ({ ...f, date: toDateStr(created.date ?? payload.date) }));
+ const normalized = normalizeItem(created);
+      setItems((prev) => (prev ? [normalized, ...prev] : [normalized]));
+      setAllItems((prev) => (prev ? [normalized, ...prev] : [normalized]));        
+      setFilter((f) => ({ ...f, date: toDateStr(created.date ?? payload.date) }));
       } catch (e) {
         setError(getErrorMessage(e));
       } finally {

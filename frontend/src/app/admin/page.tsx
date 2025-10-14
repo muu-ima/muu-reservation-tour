@@ -1,12 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import ReservationTable, {
-  Reservation,
-  Status,
-  Program,
-  Slot,
-} from "../components/ReservationTable";
+ import ReservationTable from "../components/ReservationTable";
+ import type { Reservation, Status, Program, Slot } from "@/types/reservation";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
@@ -372,7 +368,7 @@ export default function AdminPage() {
               >
                 <option value="all">すべて</option>
                 <option value="booked">booked</option>
-                <option value="cancelled">cancelled</option>
+                <option value="canceled">canceled</option>
                 <option value="done">done</option>
               </select>
             </label>

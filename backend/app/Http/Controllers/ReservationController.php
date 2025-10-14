@@ -166,7 +166,7 @@ class ReservationController extends Controller
         $data = $request->validate([
             'date' => ['sometimes', 'date'],
             'slot' => ['sometimes', Rule::in(['am', 'pm'])],
-            'status' => ['sometimes', Rule::in(['pending', 'booked', 'done', 'cancelled'])],
+            'status' => ['sometimes', Rule::in(['pending', 'booked', 'done', 'canceled', 'cancelled'])],
             'name' => ['sometimes', 'nullable', 'string', 'max:191'],
             'last_name' => ['sometimes', 'nullable', 'string', 'max:191'],
             'first_name' => ['sometimes', 'nullable', 'string', 'max:191'],
@@ -178,6 +178,10 @@ class ReservationController extends Controller
             'has_certificate' => ['sometimes', 'nullable', 'boolean'],
             'note' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
+
+        if (array_key_exists('status', $data)) {
+            $data['status'] = $data['status'] === 'cancelled' ? 'canceled' : $data['status'];
+        }
 
         $merged = array_merge($reservation->toArray(), $data);
         $merged['program'] = 'tour';
@@ -206,48 +210,59 @@ class ReservationController extends Controller
         return response()->json($reservation, 200, [], $this->jsonFlags);
     }
 
-/**
- * PATCH /api/reservations/{reservation}/cancel
- * 履歴を残しつつ、部分ユニークから外して枠を即時解放する
- */
-public function cancel(Reservation $reservation)
-{
-    return DB::transaction(function () use ($reservation) {
+    /**
+     * PATCH /api/reservations/{reservation}/cancel
+     * 履歴を残しつつ、部分ユニークから外して枠を即時解放する
+     */
+    public function cancel(Reservation $reservation)
+    {
+        return DB::transaction(function () use ($reservation) {
+            /** @var Reservation $r */
+            $r = Reservation::whereKey($reservation->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        // 行ロック付きで最新を取り直す
-        /** @var Reservation $r */
-        $r = Reservation::whereKey($reservation->getKey())
-            ->lockForUpdate()
-            ->firstOrFail();
+            // すでに終了系なら冪等にOK返す（両綴り + done を許容）
+            if (in_array($r->status, ['canceled', 'cancelled', 'done'], true)) {
+                return response()->json([
+                    'message'     => 'Reservation already finished or canceled.',
+                    'reservation' => $r,
+                ], 200);
+            }
 
-        // すでに終了系なら冪等にOK返す
-        if (in_array($r->status, ['cancelled', 'done'], true)) {
+            // キャンセル可能な状態だけ許可
+            if (!in_array($r->status, ['pending', 'booked'], true)) {
+                throw ValidationException::withMessages([
+                    'status' => ['This reservation cannot be canceled from current status.'],
+                ]);
+            }
+
+            // ステータスは米式 "canceled" に統一
+            $r->status = 'canceled';
+
+            // タイムスタンプ列は両対応（存在する方に書く）
+            $tsCol = in_array('cancelled_at', $r->getFillable(), true) ? 'cancelled_at'
+                : (in_array('canceled_at',  $r->getFillable(), true) ? 'canceled_at' : null);
+            if ($tsCol) {
+                $r->{$tsCol} = now();
+            }
+
+            // もし検証用のトークン類を持っていれば掃除（任意）
+            if (in_array('verify_token', $r->getFillable(), true)) {
+                $r->verify_token = null;
+            }
+            if (in_array('verify_expires_at', $r->getFillable(), true)) {
+                $r->verify_expires_at = null;
+            }
+
+            $r->save();
+
             return response()->json([
-                'message' => 'Reservation already finished or cancelled.',
-                'reservation' => $r,
+                'message'     => 'Reservation canceled and slot reopened.',
+                'reservation' => $r->refresh(),
             ], 200);
-        }
-
-        // キャンセル可能な状態だけ許可
-        if (!in_array($r->status, ['pending', 'booked'], true)) {
-            throw ValidationException::withMessages([
-                'status' => ['This reservation cannot be cancelled from current status.'],
-            ]);
-        }
-
-        // キャンセル → 部分ユニーク条件から外れて枠が自動解放
-        $r->status = 'cancelled';
-        if (in_array('cancelled_at', $r->getFillable(), true)) {
-            $r->cancelled_at = now();
-        }
-        $r->save();
-
-        return response()->json([
-            'message' => 'Reservation cancelled and slot reopened.',
-            'reservation' => $r->refresh(),
-        ], 200);
-    });
-}
+        });
+    }
 
     public function destroy(Reservation $reservation)
     {
@@ -313,7 +328,7 @@ public function cancel(Reservation $reservation)
         }
 
         if ($reservation->verify_expires_at && now()->greaterThan($reservation->verify_expires_at)) {
-            $reservation->status = 'cancelled';
+            $reservation->status = 'canceled';
             $reservation->save();
 
             return response()->view('verify.error', [

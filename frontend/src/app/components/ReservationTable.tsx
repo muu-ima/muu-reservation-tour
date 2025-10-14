@@ -1,39 +1,33 @@
 "use client";
 
 import React from "react";
+import type { Reservation, Status } from "@/types/reservation";
+import { normalizeStatus } from "@/types/reservation";
 
 export type Slot = "am" | "pm";
 export type Program = "tour";
-export type Status = "pending" | "booked" | "cancelled" | "done";
-
-export interface Reservation {
-  id?: number;
-  date: string;
-  program: Program;
-  slot: Slot;
-  status?: Status;
-  last_name?: string | null;
-  first_name?: string | null;
-  kana?: string;
-  email?: string | null;
-  phone?: string | null;
-  notebook_type?: string | null;
-  has_certificate?: boolean | null;
-}
 
 type Props = {
   items: Reservation[] | null;
   loading?: boolean;
-  onUpdateStatus: (id: number, status: Status) => void;
+  // どちらでも受けられるようにしておく
+  onUpdateStatus: (id: number, status: Status) => Promise<void> | void;
   onDelete: (id: number) => void;
 };
 
 const STATUS_STYLE: Record<Status, { label: string; color: string }> = {
-  pending:   { label: "仮予約", color: "bg-gray-200 text-gray-700" },
-  booked:    { label: "確定",   color: "bg-blue-200 text-blue-800" },
-  done:      { label: "完了",   color: "bg-green-200 text-green-800" },
-  cancelled: { label: "キャンセル", color: "bg-red-200 text-red-700" },
+  pending: { label: "仮予約", color: "bg-gray-200 text-gray-700" },
+  booked: { label: "確定", color: "bg-blue-200 text-blue-800" },
+  canceled: { label: "キャンセル", color: "bg-red-200 text-red-700" },
+  done: { label: "完了", color: "bg-green-200 text-green-800" },
 };
+
+// 'cancelled' でも undefined でも安全にスタイルを返す
+function styleOf(raw?: Status | "cancelled" | null) {
+  // undefined/null なら "pending" に寄せ、"cancelled" も normalize で "canceled" へ
+  const s = normalizeStatus(raw ?? "pending");
+  return STATUS_STYLE[s];
+}
 
 export default function ReservationTable({
   items,
@@ -55,18 +49,18 @@ export default function ReservationTable({
           {/* ② table-fixed + colgroup で幅を固定 */}
           <table className="min-w-[980px] w-full table-fixed text-sm border-collapse">
             <colgroup>
-              <col className="w-14" />   {/* ID */}
-              <col className="w-28" />   {/* 日付 */}
-              <col className="w-24" />   {/* プログラム */}
-              <col className="w-20" />   {/* 時間帯 */}
-              <col className="w-24" />   {/* 姓 */}
-              <col className="w-24" />   {/* 名 */}
-              <col className="w-28" />   {/* かな */}
-              <col className="w-44" />   {/* メール */}
-              <col className="w-32" />   {/* 電話 */}
-              <col className="w-28" />   {/* 手帳 */}
-              <col className="w-20" />   {/* 受給者証 */}
-              <col className="w-24" />   {/* 状態 */}
+              <col className="w-14" /> {/* ID */}
+              <col className="w-28" /> {/* 日付 */}
+              <col className="w-24" /> {/* プログラム */}
+              <col className="w-20" /> {/* 時間帯 */}
+              <col className="w-24" /> {/* 姓 */}
+              <col className="w-24" /> {/* 名 */}
+              <col className="w-28" /> {/* かな */}
+              <col className="w-44" /> {/* メール */}
+              <col className="w-32" /> {/* 電話 */}
+              <col className="w-28" /> {/* 手帳 */}
+              <col className="w-20" /> {/* 受給者証 */}
+              <col className="w-24" /> {/* 状態 */}
               <col className="w-[220px]" /> {/* 操作ボタン */}
             </colgroup>
 
@@ -97,26 +91,42 @@ export default function ReservationTable({
                   {/* ③ 各セルは nowrap + truncate でハミ出し抑制 */}
                   <td className="py-2 px-2 whitespace-nowrap">{r.id ?? "-"}</td>
                   <td className="py-2 px-2 whitespace-nowrap">
-                    {typeof r.date === "string" ? r.date.slice(0, 10) : String(r.date)}
+                    {typeof r.date === "string"
+                      ? r.date.slice(0, 10)
+                      : String(r.date)}
                   </td>
                   <td className="py-2 px-2 whitespace-nowrap">{r.program}</td>
                   <td className="py-2 px-2 whitespace-nowrap">{r.slot}</td>
-                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.last_name ?? ""}</td>
-                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.first_name ?? ""}</td>
-                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.kana ?? ""}</td>
-                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.email ?? ""}</td>
-                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.phone ?? ""}</td>
-                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">{r.notebook_type ?? ""}</td>
-                  <td className="py-2 px-2 whitespace-nowrap">{r.has_certificate ? "○" : "×"}</td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                    {r.last_name ?? ""}
+                  </td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                    {r.first_name ?? ""}
+                  </td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                    {r.kana ?? ""}
+                  </td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                    {r.email ?? ""}
+                  </td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                    {r.phone ?? ""}
+                  </td>
+                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                    {r.notebook_type ?? ""}
+                  </td>
+                  <td className="py-2 px-2 whitespace-nowrap">
+                    {r.has_certificate ? "○" : "×"}
+                  </td>
 
                   <td className="py-2 px-2 whitespace-nowrap">
-                    {r.status ? (
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLE[r.status].color}`}>
-                        {STATUS_STYLE[r.status].label}
-                      </span>
-                    ) : (
-                      "-"
-                    )}
+                    <span
+                      className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        styleOf(r.status).color
+                      }`}
+                    >
+                      {styleOf(r.status).label}
+                    </span>
                   </td>
 
                   {/* ④ ボタン群は text-xs + gap を調整して崩れ防止 */}
@@ -140,7 +150,7 @@ export default function ReservationTable({
                               完了
                             </button>
                             <button
-                              onClick={() => onUpdateStatus(r.id!, "cancelled")}
+                              onClick={() => onUpdateStatus(r.id!, "canceled")}
                               className="px-2.5 py-1 text-xs rounded-lg border border-red-300 text-red-700 hover:bg-red-50"
                             >
                               キャンセル
