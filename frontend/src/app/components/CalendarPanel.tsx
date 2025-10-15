@@ -167,6 +167,16 @@ export default function CalendarPanel() {
     return map;
   }, [allItems, monthKey]);
 
+  function slotAvailabilityLabel(counts: SlotCounts, maxPerSlot = 1): string {
+    const amFull = counts.am >= maxPerSlot;
+    const pmFull = counts.pm >= maxPerSlot;
+
+    if (amFull && pmFull) return "満席";
+    if (!amFull && !pmFull) return "午前・午後 空きあり";
+    if (!amFull && pmFull) return "午前 空きあり";
+    return "午後 空きあり";
+  }
+
   // ===== UI
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-800 md:p-8 p-2 font-sans">
@@ -259,7 +269,7 @@ export default function CalendarPanel() {
             </div>
           </div>
           {/* 曜日ヘッダー — PC/タブレットのみ */}
-          <div className="hidden md:grid grid-cols-7 text-sm text-gray-500">
+          <div className="hidden lg:grid grid-cols-7 text-sm text-gray-500">
             {["月", "火", "水", "木", "金", "土", "日"].map((w, i) => {
               const style =
                 i === 5
@@ -281,7 +291,7 @@ export default function CalendarPanel() {
           <AnimatePresence mode="wait">
             <motion.div
               key={formatMonthJP(calCursor)}
-              className="hidden md:grid grid-cols-7 gap-1"
+              className="hidden lg:grid grid-cols-7 gap-1"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
@@ -351,34 +361,17 @@ export default function CalendarPanel() {
                         </span>
                       )}
                     </div>
-
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {counts.am > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
-                          AM×{counts.am}
-                        </span>
-                      )}
-                      {counts.pm > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
-                          PM×{counts.pm}
-                        </span>
+                    {/* ステータス（午前/午後の空き） */}
+                    <div className="flex-1 min-w-0">
+                      {dayItems.length > 0 && (
+                        <div
+                          className="mt-0.5 text-[11px] text-neutral-600 truncate"
+                          aria-hidden
+                        >
+                          {slotAvailabilityLabel(counts, 1)}
+                        </div>
                       )}
                     </div>
-
-                    {dayItems[0] && (
-                      <div
-                        className="mt-1 text-[11px] text-gray-500 truncate"
-                        aria-hidden
-                      >
-                        {(dayItems[0].last_name ?? "") +
-                          (dayItems[0].first_name
-                            ? ` ${dayItems[0].first_name}`
-                            : "")}
-                        {dayItems.length > 1
-                          ? ` 他${dayItems.length - 1}件`
-                          : ""}
-                      </div>
-                    )}
 
                     {/* 右下バッジ（固定配置） */}
                     {isWeekendCell ? (
@@ -416,7 +409,7 @@ export default function CalendarPanel() {
           </AnimatePresence>
           {/* ▼ モバイル用アジェンダ表示（スマホのみ, 半月ビュー＋横フリックで月移動） */}
           <div
-            className="md:hidden w-full max-w-none px-2"
+            className="lg:hidden w-full max-w-none px-2"
             ref={mobileListRef}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
@@ -479,7 +472,6 @@ export default function CalendarPanel() {
                       },
                       { am: 0, pm: 0 }
                     );
-                    const total = dayItems.length;
                     const isToday = cell.dateStr === toDateStr(new Date());
                     const isWeekendCell = isWeekendStr(cell.dateStr);
                     const w = ["日", "月", "火", "水", "木", "金", "土"][
@@ -546,43 +538,17 @@ export default function CalendarPanel() {
                             </div>
                           </div>
 
-                          {/* 件数 / 先頭氏名 */}
+                          {/* ステータス（午前/午後の空き） */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              {total > 0 && (
-                                <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">
-                                  {total}件
-                                </span>
-                              )}
-                              <div className="flex flex-wrap gap-1">
-                                {counts.am > 0 && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
-                                    AM×{counts.am}
-                                  </span>
-                                )}
-                                {counts.pm > 0 && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md border">
-                                    PM×{counts.pm}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            {dayItems[0] && (
+                            {dayItems.length > 0 && (
                               <div
-                                className="mt-0.5 text-[11px] text-gray-500 truncate"
+                                className="mt-0.5 text-[11px] text-neutral-600 truncate"
                                 aria-hidden
                               >
-                                {(dayItems[0].last_name ?? "") +
-                                  (dayItems[0].first_name
-                                    ? ` ${dayItems[0].first_name}`
-                                    : "")}
-                                {dayItems.length > 1
-                                  ? ` 他${dayItems.length - 1}件`
-                                  : ""}
+                                {slotAvailabilityLabel(counts, 1)}
                               </div>
                             )}
                           </div>
-
                           {/* 右端：＋ / 休 / 停 */}
                           {isWeekendCell ? (
                             <div
