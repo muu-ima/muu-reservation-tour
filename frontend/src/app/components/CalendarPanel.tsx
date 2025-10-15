@@ -157,7 +157,7 @@ export default function CalendarPanel() {
   // ===== UI
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+      <div className="mx-auto w-[80%] max-w-[1600px] space-y-6">
         <header
           className="sticky top-0 z-30 -mx-6 mb-4 px-6 py-3
                    backdrop-blur supports-[backdrop-filter]:bg-white/75

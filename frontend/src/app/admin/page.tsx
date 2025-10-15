@@ -335,7 +335,7 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
-      <div className="mx-auto max-w-7xl space-y-4">
+      <div className="mx-auto w-[80%] max-w-[1600px] space-y-4">
         <header className="flex items-center justify-between gap-3">
           <h1 className="text-2xl md:text-3xl font-semibold">
             Reservations Admin
