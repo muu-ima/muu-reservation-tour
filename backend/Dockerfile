@@ -17,6 +17,11 @@ ENV RUN_SCRIPTS=1 \
     LOG_CHANNEL=stderr \
     COMPOSER_ALLOW_SUPERUSER=1
 
+    
+# ▼ これを追加（ビルド時に依存を入れる）
+RUN composer install --no-dev -o
+
+
 # 起動時の初期化（権限・キャッシュ・migrate）
 COPY scripts/00-laravel-deploy.sh /start.d/00-laravel-deploy.sh
 RUN chmod +x /start.d/00-laravel-deploy.sh
