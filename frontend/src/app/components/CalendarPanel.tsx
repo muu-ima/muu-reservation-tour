@@ -156,27 +156,24 @@ export default function CalendarPanel() {
 
   // ===== UI
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
-      <div className="mx-auto w-[80%] max-w-[1600px] space-y-6">
-        <header
-          className="sticky top-0 z-30 -mx-6 mb-4 px-6 py-3
-                   backdrop-blur supports-[backdrop-filter]:bg-white/75
-                   bg-white/90 dark:bg-black/30 border-b border-[var(--border)]
-                   flex items-center justify-between gap-3"
-        >
+    <div className="min-h-screen bg-neutral-100 text-neutral-800 md:p-8 p-2 font-sans">
+      <div className="mx-auto w-full md:w-[80%] md:max-w-[1500px] px-2 md:px-0 space-y-6">
+        <header className="sticky top-0 z-30 -mx-2 md:-mx-6 mb-4 px-3 md:px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/75 bg-white/90 dark:bg-black/30 border-b border-[var(--border)] flex items-center justify-between gap-2">
           {" "}
-          <h1 className="text-2xl md:text-3xl font-semibold">予約カレンダー</h1>
-          <div className="flex items-center gap-2">
+          <h1 className="text-xl md:text-3xl font-semibold tracking-tight">
+            予約カレンダー
+          </h1>
+          <div className="flex items-center gap-1 md:gap-2 flex-nowrap whitespace-nowrap">
             <button
               onClick={fetchReservations}
-              className="px-4 py-2 rounded-2xl shadow bg-white hover:bg-gray-100 disabled:opacity-50"
+              className="px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base rounded-xl bg-white ring-1 ring-neutral-300 hover:bg-neutral-50 disabled:opacity-50"
               disabled={loading}
             >
               {loading ? "更新中…" : "更新"}
             </button>
             <button
               onClick={() => openCreate()}
-              className="px-4 py-2 rounded-2xl shadow bg-black text-white hover:opacity-90"
+              className="px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base rounded-xl bg-neutral-900 text-white hover:bg-neutral-800"
             >
               ＋ 新規予約
             </button>
@@ -199,7 +196,8 @@ export default function CalendarPanel() {
         )}
 
         {/* ===== カレンダー表示 ===== */}
-        <section className="rounded-2xl bg-white shadow p-5 space-y-4">
+        <section className="rounded-2xl md:rounded-3xl bg-white/95 shadow-lg ring-1 ring-neutral-200 md:p-8 space-y-2 transition hover:shadow-xl">
+          {" "}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 flex-wrap">
               <button
@@ -239,7 +237,6 @@ export default function CalendarPanel() {
               </button>
             </div>
           </div>
-
           {/* 曜日ヘッダー — PC/タブレットのみ */}
           <div className="hidden md:grid grid-cols-7 text-xs text-gray-500">
             {["月", "火", "水", "木", "金", "土", "日"].map((w) => (
@@ -248,7 +245,6 @@ export default function CalendarPanel() {
               </div>
             ))}
           </div>
-
           {/* 月グリッド — PC/タブレットのみ */}
           <AnimatePresence mode="wait">
             <motion.div
@@ -294,9 +290,10 @@ export default function CalendarPanel() {
                     tabIndex={0}
                     onClick={onCellClick}
                     className={[
-                      "relative h-28 rounded-xl border p-2 text-left transition",
-                      cell.inMonth ? "bg-white" : "bg-gray-50",
-                      isToday ? "ring-2 ring-blue-500" : "hover:shadow-sm",
+                      "relative h-32 rounded-2xl bg-white/90 text-left p-3 transition",
+                      "ring-1 ring-neutral-200 hover:ring-neutral-300 hover:shadow-md",
+                      cell.inMonth ? "text-neutral-800" : "text-neutral-400",
+                      isToday ? "bg-neutral-50 ring-2 ring-neutral-800" : "",
                     ].join(" ")}
                     whileTap={{ scale: 0.98 }}
                     initial={{ opacity: 0, y: 6 }}
@@ -385,10 +382,9 @@ export default function CalendarPanel() {
               })}
             </motion.div>
           </AnimatePresence>
-
           {/* ▼ モバイル用アジェンダ表示（スマホのみ, 半月ビュー＋横フリックで月移動） */}
           <div
-            className="md:hidden -mx-2"
+            className="md:hidden w-full max-w-none px-2"
             ref={mobileListRef}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
@@ -571,7 +567,6 @@ export default function CalendarPanel() {
               横フリック＝月移動／タブで「前半・後半」を切り替え。日付タップで一覧に反映。
             </p>
           </div>
-
           <p className="text-xs text-gray-500">
             日付タップで一覧に反映。右下「＋」でその日に新規作成。
           </p>
