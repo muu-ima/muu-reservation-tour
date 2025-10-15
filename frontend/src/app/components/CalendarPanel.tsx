@@ -232,7 +232,7 @@ export default function CalendarPanel() {
               >
                 ←
               </button>
-              <span className="min-w-[10ch] text-center text-sm text-gray-700">
+              <span className="min-w-[10ch] text-center text-xl md:text-2xl font-semibold text-gray-800 tracking-wide">
                 {formatMonthJP(calCursor)}
               </span>
               <button
@@ -259,12 +259,23 @@ export default function CalendarPanel() {
             </div>
           </div>
           {/* 曜日ヘッダー — PC/タブレットのみ */}
-          <div className="hidden md:grid grid-cols-7 text-xs text-gray-500">
-            {["月", "火", "水", "木", "金", "土", "日"].map((w) => (
-              <div key={w} className="p-2 text-center font-medium">
-                {w}
-              </div>
-            ))}
+          <div className="hidden md:grid grid-cols-7 text-sm text-gray-500">
+            {["月", "火", "水", "木", "金", "土", "日"].map((w, i) => {
+              const style =
+                i === 5
+                  ? "bg-blue-50 text-blue-500"
+                  : i === 6
+                  ? "bg-red-50 text-red-500"
+                  : "text-gray-700";
+              return (
+                <div
+                  key={w}
+                  className={`p-2 text-center font-semibold text-base ${style}`}
+                >
+                  {w}
+                </div>
+              );
+            })}
           </div>
           {/* 月グリッド — PC/タブレットのみ */}
           <AnimatePresence mode="wait">
@@ -478,13 +489,38 @@ export default function CalendarPanel() {
                     return (
                       <li key={cell.dateStr}>
                         <div
-                          className="relative flex items-center gap-3 px-3 py-2 active:bg-gray-50"
-                          onClick={() =>
-                            setFilter((f) => ({ ...f, date: cell.dateStr }))
-                          }
                           role="button"
                           tabIndex={0}
-                          title={`${cell.dateStr}の予約を一覧で表示`}
+                          aria-disabled={
+                            !(!isWeekendCell && isBookable(cell.dateStr))
+                          }
+                          title={
+                            !isWeekendCell && isBookable(cell.dateStr)
+                              ? `${cell.dateStr} に予約を追加`
+                              : `${cell.dateStr} の予約を一覧で表示`
+                          }
+                          onClick={() => {
+                            const canBook =
+                              !isWeekendCell && isBookable(cell.dateStr);
+                            if (canBook) {
+                              openCreate(cell.dateStr);
+                            } else {
+                              // 週末は無視、平日の非予約日は一覧に反映＋メッセージ
+                              if (!isWeekendCell) {
+                                setFilter((f) => ({
+                                  ...f,
+                                  date: cell.dateStr,
+                                }));
+                                alert("本日以前・停止日は予約できません。");
+                              }
+                            }
+                          }}
+                          className={
+                            "relative flex items-center gap-3 px-3 py-3 transition " +
+                            (!isWeekendCell && isBookable(cell.dateStr)
+                              ? "hover:bg-neutral-50 active:bg-neutral-100 cursor-pointer"
+                              : "bg-neutral-50 text-neutral-400 cursor-not-allowed")
+                          }
                         >
                           {/* 日付バッジ */}
                           <div className="w-14 shrink-0 text-center">
