@@ -93,6 +93,19 @@ export default function CalendarPanel() {
     x.setDate(x.getDate() + n);
     return x;
   };
+
+  // 次に予約可能な日付（今日の翌日から最大60日先まで）を返す
+  function nextBookableDate(fromDateStr: string): string | null {
+    const base = new Date(fromDateStr + "T00:00:00");
+    for (let i = 1; i <= 60; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      const s = toDateStr(d);
+      if (!isWeekendStr(s) && isBookable(s)) return s;
+    }
+    return null;
+  }
+
   const addMonths = (d: Date, n: number) =>
     new Date(d.getFullYear(), d.getMonth() + n, 1);
 
@@ -172,7 +185,15 @@ export default function CalendarPanel() {
               {loading ? "更新中…" : "更新"}
             </button>
             <button
-              onClick={() => openCreate()}
+              onClick={() => {
+                const today = toDateStr(new Date());
+                const next = nextBookableDate(today);
+                if (next) {
+                  openCreate(next);
+                } else {
+                  alert("直近60日内に予約可能な日がありません。");
+                }
+              }}
               className="px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base rounded-xl bg-neutral-900 text-white hover:bg-neutral-800"
             >
               ＋ 新規予約
