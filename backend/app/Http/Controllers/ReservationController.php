@@ -277,9 +277,8 @@ class ReservationController extends Controller
     private function calcWindow(string $dateYmd, string $slot): array
     {
         $ranges = [
-            'am' => ['10:00:00', '12:00:00'],
-            'pm' => ['13:00:00', '15:00:00'],
-            'full' => ['10:00:00', '15:00:00'],
+            'am' => ['10:30:00', '12:00:00'],
+            'pm' => ['13:30:00', '15:00:00'],
         ];
         [$startHHMMSS, $endHHMMSS] = $ranges[$slot] ?? $ranges['am'];
 
