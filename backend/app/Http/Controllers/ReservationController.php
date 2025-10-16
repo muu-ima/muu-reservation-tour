@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ReservationVerifyMail;
+use App\Mail\ReservationConfirmed;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -343,11 +344,23 @@ class ReservationController extends Controller
         //     'program' => 'tour',
         // ], $reservation->id);
 
+        // 確定処理
         $reservation->status = 'booked';
         $reservation->verified_at = now();
         $reservation->verify_token = null;
         $reservation->verify_expires_at = null;
         $reservation->save();
+        // ★ ここで「確定メール」を一度だけ送る
+        try {
+            Mail::to($reservation->email)->send(new ReservationConfirmed($reservation));
+            } catch (\Throwable $e) {
+                Log::error('✉️ ReservationConfirmed send failed', [
+                    'rid' => $reservation->id,
+                    'to'  => $reservation->email,
+                    'e'   => $e->getMessage(),
+                ]);
+                //送信失敗でも確定自体は完了させる
+            }
 
         return response()->view('verify.success', [
             'title' => '予約確定',

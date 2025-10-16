@@ -28,7 +28,8 @@ class ReservationVerifyMail extends Mailable
      */
     public function build()
     {
-        return $this->subject('【予約確認】1時間以内に下記リンクをクリックしてください')
+        return $this->from(config('mail.from.address'), config('mail.from.name'))
+            ->subject('【予約確認】1時間以内に下記リンクをクリックしてください')
             ->view('emails.reservation_verify'); // Bladeテンプレートのパス
     }
 }
