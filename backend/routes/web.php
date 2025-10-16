@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\ReservationController;
 
 /*
@@ -16,6 +17,29 @@ use App\Http\Controllers\ReservationController;
 Route::get('/verify/{reservation}', [ReservationController::class, 'verify'])
     ->name('reservations.verify')
     ->middleware('signed'); // ← 署名チェック（期限もURL内に埋め込める）
+
+    
+/*
+|--------------------------------------------------------------------------
+| 開発・テスト用ルート
+|--------------------------------------------------------------------------
+|
+| Render → Gmail へメール送信テストするためのルート。
+| 動作確認後は削除してOK。
+|
+*/
+
+Route::get('/mail-test', function () {
+    try {
+        Mail::raw('Render から Gmail 経由で送信テスト成功！', function ($m) {
+            $m->to('あなたの@gmail.com') // ← ここを自分のGmailに置き換えてください
+              ->subject('Laravel SMTP テストメール');
+        });
+        return '✅ メール送信を実行しました。Gmailを確認してください。';
+    } catch (\Throwable $e) {
+        return '❌ 送信エラー: ' . $e->getMessage();
+    }
+});
 
 /*
 |--------------------------------------------------------------------------
