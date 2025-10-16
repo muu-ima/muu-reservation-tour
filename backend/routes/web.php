@@ -32,7 +32,7 @@ Route::get('/verify/{reservation}', [ReservationController::class, 'verify'])
 Route::get('/mail-test', function () {
     try {
         Mail::raw('Render から Gmail 経由で送信テスト成功！', function ($m) {
-            $m->to('あなたの@gmail.com') // ← ここを自分のGmailに置き換えてください
+            $m->to('enyukari.k.imamura@gmail.com') // ← ここを自分のGmailに置き換えてください
               ->subject('Laravel SMTP テストメール');
         });
         return '✅ メール送信を実行しました。Gmailを確認してください。';
