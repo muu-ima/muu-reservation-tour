@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   backend:
     build:
@@ -8,19 +6,19 @@ services:
     ports:
       - "8081:80"
     volumes:
-      - ./backend:/var/www/html            # プロジェクト一式をマウント
-      - ./backend/.env:/var/www/html/.env  # ← .env を明示的にマウント
+      - ./backend:/var/www/html
+      - ./backend/.env:/var/www/html/.env
     environment:
       - APP_ENV=local
       - APP_DEBUG=true
       - WEBROOT=/var/www/html/public
       - PHP_ERRORS_STDERR=1
       - LOG_STDOUT=1
-      # ↓ 必要なら初期処理を抑制（このイメージがサポート）
       - SKIP_CHOWN=1
       - SKIP_COMPOSER=1
     depends_on:
       - db
+      - mailpit
 
   frontend:
     build:
@@ -28,12 +26,11 @@ services:
     container_name: next-frontend
     ports:
       - "3000:3000"
-    user: "${UID}:${GID}"
+    user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./frontend:/app
-      # node_modules はコンテナ側に隔離して所有権事故を防ぐ
       - /app/node_modules
-      - ./frontend/.env.local:/app/.env.loca
+      - ./frontend/.env.local:/app/.env.local
     environment:
       - NODE_ENV=development
     command: npm run dev
@@ -54,5 +51,19 @@ services:
     volumes:
       - dbdata:/var/lib/mysql
 
+  mailpit:
+    image: axllent/mailpit
+    container_name: mailpit
+    restart: always
+    ports:
+      - "8025:8025"   # UI
+      - "1025:1025"   # SMTP
+    environment:
+      - MP_MAX_MESSAGES=5000
+      - MP_DATABASE=/data/mailpit.db   # ← 推奨キー
+    volumes:
+      - mailpit_data:/data             # ← ボリュームを正しく参照
+
 volumes:
   dbdata:
+  mailpit_data:
