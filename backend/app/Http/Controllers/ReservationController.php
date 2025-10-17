@@ -303,38 +303,53 @@ class ReservationController extends Controller
     /* ===============================
      * GET /verify/{reservation}?token=xxxxx
      * =============================== */
+
     public function verify(Request $request, Reservation $reservation)
     {
-        // 署名チェック (URL改ざん/期限切れ)
+        // ミニHTMLを返す小さなヘルパ
+        $html = function (string $title, string $message) {
+            return response(
+                '<!doctype html><meta charset="utf-8">' .
+                    '<meta name="robots" content="noindex,nofollow">' .
+                    '<title>' . e($title) . '</title>' .
+                    '<style>body{font-family:sans-serif;line-height:1.8;margin:3rem;color:#111}</style>' .
+                    '<h1 style="font-size:1.25rem;margin:0 0 .5rem 0;">' . e($title) . '</h1>' .
+                    '<p>' . nl2br(e($message)) . '</p>',
+                200
+            )->header('Content-Type', 'text/html; charset=UTF-8');
+        };
+
+        // 署名チェック（URL改ざん/期限切れ）
         if (! $request->hasValidSignature()) {
-            // 画面は出さずに終了
-            return response()->noContent(403);
+            return $html('リンクが無効です', "リンクの有効期限が切れているか、URLが改ざんされています。");
         }
 
-        // トークン一致確認(使っている場合)
+        // トークン一致確認（トークン方式を使っている場合）
         $token = $request->query('token');
         if (! $token || $token !== $reservation->verify_token) {
-            return response()->noContent(403);
+            return $html('リンクが無効です', "無効なリンクです。お手数ですが、最初から予約をやり直してください。");
         }
 
-        // 期限切れはキャンセルにして終了
+        // 期限切れは自動キャンセルにして終了
         if ($reservation->verify_expires_at && now()->greaterThan($reservation->verify_expires_at)) {
             $reservation->update(['status' => 'canceled']);
-            return response()->noContent(410);
+            return $html('有効期限切れ', "確認リンクの有効期限が切れたため、予約はキャンセルされました。");
         }
 
-        //すでに処理済みなら何もせず終了 (多重クリック対策)
+        // 多重クリック・再訪問（pending 以外は何もしない）
         if ($reservation->status !== 'pending') {
-            return response()->noContent(200);
+            return $html('処理済み', "この予約はすでに確定またはキャンセルされています。");
         }
 
         // 確定処理
-        $reservation->status = 'booked';
-        $reservation->verified_at = now();
-        $reservation->verify_token = null;
-        $reservation->verify_expires_at = null;
-        $reservation->save();
-        // ★ ここで「確定メール」を一度だけ送る
+        $reservation->forceFill([
+            'status'            => 'booked',
+            'verified_at'       => now(),
+            'verify_token'      => null,
+            'verify_expires_at' => null,
+        ])->save();
+
+        // 確定メール（Markdown）送信：失敗しても確定は維持
         try {
             Mail::to($reservation->email)->send(new ReservationConfirmed($reservation));
         } catch (\Throwable $e) {
@@ -343,12 +358,12 @@ class ReservationController extends Controller
                 'to'  => $reservation->email,
                 'e'   => $e->getMessage(),
             ]);
-            //送信失敗でも確定自体は完了させる
         }
 
-        // 画面は出さない（危険サイト警告を避ける）
-        return response()->noContent(); // 204
+        // 最小HTMLで完了表示（危険サイト警告を避けつつユーザーに分かる）
+        return $html('予約が確定しました', "ありがとうございます。数分以内に「確定メール」をお送りしますのでご確認ください。");
     }
+
     // 予約の重複（ユニーク制約違反）っぽいか判定
     private function looksLikeOverlap(\Throwable $e): bool
     {
