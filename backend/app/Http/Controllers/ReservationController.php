@@ -305,43 +305,28 @@ class ReservationController extends Controller
      * =============================== */
     public function verify(Request $request, Reservation $reservation)
     {
+        // 署名チェック (URL改ざん/期限切れ)
         if (! $request->hasValidSignature()) {
-            return response()->view('verify.error', [
-                'title' => '認証エラー',
-                'message' => 'リンクの有効期限が切れているか、URLが改ざんされています。',
-            ], 400);
+            // 画面は出さずに終了
+            return response()->noContent(403);
         }
 
+        // トークン一致確認(使っている場合)
         $token = $request->query('token');
         if (! $token || $token !== $reservation->verify_token) {
-            return response()->view('verify.error', [
-                'title' => '認証エラー',
-                'message' => '無効なリンクです。もう一度予約をやり直してください。',
-            ], 400);
+            return response()->noContent(403);
         }
 
-        if ($reservation->status !== 'pending') {
-            return response()->view('verify.error', [
-                'title' => 'すでに処理済み',
-                'message' => 'この予約はすでに確定またはキャンセルされています。',
-            ], 409);
-        }
-
+        // 期限切れはキャンセルにして終了
         if ($reservation->verify_expires_at && now()->greaterThan($reservation->verify_expires_at)) {
-            $reservation->status = 'canceled';
-            $reservation->save();
-
-            return response()->view('verify.error', [
-                'title' => '期限切れ',
-                'message' => '確認リンクの有効期限が切れたため、予約はキャンセルされました。',
-            ], 410);
+            $reservation->update(['status' => 'canceled']);
+            return response()->noContent(410);
         }
 
-        // $this->assertNoProgramOverlap([
-        //     'date'    => $reservation->date->toDateString(),
-        //     'slot'    => $reservation->slot,
-        //     'program' => 'tour',
-        // ], $reservation->id);
+        //すでに処理済みなら何もせず終了 (多重クリック対策)
+        if ($reservation->status !== 'pending') {
+            return response()->noContent(200);
+        }
 
         // 確定処理
         $reservation->status = 'booked';
@@ -352,20 +337,17 @@ class ReservationController extends Controller
         // ★ ここで「確定メール」を一度だけ送る
         try {
             Mail::to($reservation->email)->send(new ReservationConfirmed($reservation));
-            } catch (\Throwable $e) {
-                Log::error('✉️ ReservationConfirmed send failed', [
-                    'rid' => $reservation->id,
-                    'to'  => $reservation->email,
-                    'e'   => $e->getMessage(),
-                ]);
-                //送信失敗でも確定自体は完了させる
-            }
+        } catch (\Throwable $e) {
+            Log::error('✉️ ReservationConfirmed send failed', [
+                'rid' => $reservation->id,
+                'to'  => $reservation->email,
+                'e'   => $e->getMessage(),
+            ]);
+            //送信失敗でも確定自体は完了させる
+        }
 
-        return response()->view('verify.success', [
-            'title' => '予約確定',
-            'message' => '予約が確定しました。ありがとうございます！',
-            'reservation' => $reservation,
-        ], 200);
+        // 画面は出さない（危険サイト警告を避ける）
+        return response()->noContent(); // 204
     }
     // 予約の重複（ユニーク制約違反）っぽいか判定
     private function looksLikeOverlap(\Throwable $e): bool

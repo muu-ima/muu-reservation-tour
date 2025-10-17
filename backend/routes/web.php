@@ -4,6 +4,8 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\ReservationController;
 use Illuminate\Support\Facades\URL;
+use App\Mail\ReservationConfirmed;
+use App\Models\Reservation;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,21 +45,20 @@ Route::get('/preview-mail', function () {
 |--------------------------------------------------------------------------
 */
 Route::get('/mail-confirm-test', function () {
-    $r = (object)[
-        'first_name' => '太郎',
-        'last_name'  => '山田',
-        'program'    => '見学',
-    ];
+    // 保存はしないダミー予約を用意（個別代入ならmass assignmentに引っかからない）
+    $r = new Reservation();
+    $r->first_name = '太郎';
+    $r->last_name  = '山田';
+    $r->program    = '見学';
+    $r->slot       = 'am';            // 'am' or 'pm'（Mailable内の$slotMapに合わせる）
+    $r->date       = '2025-10-20';    // Carbon::parseできる形式に
 
-    $dateStr   = '2025-10-20';
-    $slotLabel = '午前';
-    $startTime = '10:00';
-    $endTime   = '12:00';
+    // start_at / end_at を省略すれば、Mailable内の $slotMap の時刻が使われる
+    // 必要なら↓のように指定もOK
+    // $r->start_at = '2025-10-20 10:30:00';
+    // $r->end_at   = '2025-10-20 12:00:00';
 
-    // Markdownメールを送信（Mailpitへ）
-    Mail::send('emails.confirm', compact('r', 'dateStr', 'slotLabel', 'startTime', 'endTime'), function ($m) {
-        $m->to('test@example.com')->subject('【テスト】ご予約が確定しました');
-    });
+    Mail::to('test@example.com')->send(new ReservationConfirmed($r));
 
     return '✅ Mailpit に「ご予約確定メール（Markdown）」を送信しました。';
 });
