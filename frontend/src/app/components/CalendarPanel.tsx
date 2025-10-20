@@ -18,12 +18,63 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
   "https://muu-reservation-tour.onrender.com/api";
 
-// === 共通タイプ（reduce 用）: am/pm のみ ===
-type SlotCounts = { am: number; pm: number };
+// === 追加: 午前/午後の状態を表す（statusベース） ===
+type SlotState = "open" | "pending" | "booked";
+type DaySlotState = { am: SlotState; pm: SlotState };
 
-/** Slot が 'am' | 'pm' かを絞り込む */
-function isAmPm(x: unknown): x is "am" | "pm" {
-  return x === "am" || x === "pm";
+// 予約配列から am/pm の状態を要約（canceledは既に除外済み）
+function summarizeSlots(items: Reservation[]): DaySlotState {
+  const init: DaySlotState = { am: "open", pm: "open" };
+  for (const r of items) {
+    if (r.slot !== "am" && r.slot !== "pm") continue;
+    const cur = init[r.slot];
+    // 優先度: booked > pending > open
+    if (r.status === "booked") init[r.slot] = "booked";
+    else if (r.status === "pending" && cur !== "booked")
+      init[r.slot] = "pending";
+  }
+  return init;
+}
+
+// どちらか埋まっていたら（pending含む）受付停止＝true
+function isDayClosedBySlots(state: DaySlotState) {
+  return state.am !== "open" || state.pm !== "open";
+}
+
+// 状態テキスト（セルの小さな説明行用）
+function slotStateLabel(s: DaySlotState): string {
+  const txt = (k: "am" | "pm") =>
+    s[k] === "booked"
+      ? k === "am"
+        ? "午前 予約済"
+        : "午後 予約済"
+      : s[k] === "pending"
+      ? k === "am"
+        ? "午前 保留"
+        : "午後 保留"
+      : "";
+  // 片方でも booked があれば「満席」
+  if (s.am === "booked" || s.pm === "booked") return "満席";
+
+  // どちらも open なら非表示（空文字）
+  if (s.am === "open" && s.pm !== "open") return "";
+
+  // booked は無いが pending がある場合
+  if (s.am === "pending" || s.pm === "pending") {
+    return [txt("am"), txt("pm")].filter(Boolean).join(" / ");
+  }
+
+  // それ以外
+  return "";
+}
+
+// バッジの文言（右下「停」ホバー/タイトル向け）
+function closeReason(s: DaySlotState): string {
+  if (s.am === "booked" || s.am === "pending")
+    return "午前が埋まっているため受付停止";
+  if (s.pm === "booked" || s.pm === "pending")
+    return "午後が埋まっているため受付停止";
+  return "受付可";
 }
 
 const isCanceled = (s?: Reservation["status"]) => s === "canceled";
@@ -167,16 +218,6 @@ export default function CalendarPanel() {
     return map;
   }, [allItems, monthKey]);
 
-  function slotAvailabilityLabel(counts: SlotCounts, maxPerSlot = 1): string {
-    const amFull = counts.am >= maxPerSlot;
-    const pmFull = counts.pm >= maxPerSlot;
-
-    if (amFull && pmFull) return "満席";
-    if (!amFull && !pmFull) return "午前・午後 空きあり";
-    if (!amFull && pmFull) return "午前 空きあり";
-    return "午後 空きあり";
-  }
-
   // ===== UI
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-800 md:p-8 p-2 font-sans">
@@ -299,26 +340,27 @@ export default function CalendarPanel() {
             >
               {monthCells.map((cell, i) => {
                 const dayItems = dayMap[cell.dateStr] ?? [];
-                const counts = dayItems.reduce<SlotCounts>(
-                  (acc, r) => {
-                    if (isAmPm(r.slot)) acc[r.slot] = acc[r.slot] + 1;
-                    return acc;
-                  },
-                  { am: 0, pm: 0 }
-                );
+                const slotState = summarizeSlots(dayItems);
                 const total = dayItems.length;
                 const isToday = cell.dateStr === toDateStr(new Date());
                 const isWeekendCell = isWeekendStr(cell.dateStr);
-                const canBook = isBookable(cell.dateStr);
+
+                // 受付可否: 平日で isBookable かつ「どちらもopen」のときだけ true
+                const accepting =
+                  !isWeekendCell &&
+                  isBookable(cell.dateStr) &&
+                  !isDayClosedBySlots(slotState);
 
                 const onCellClick = () => {
-                  if (canBook) {
+                  if (accepting) {
                     openCreate(cell.dateStr);
                   } else {
                     setFilter((f) => ({ ...f, date: cell.dateStr }));
                     alert(
                       isWeekendCell
                         ? "土日は休業日のため予約できません。"
+                        : isDayClosedBySlots(slotState)
+                        ? closeReason(slotState)
                         : "本日以前・停止日は予約できません。"
                     );
                   }
@@ -361,16 +403,27 @@ export default function CalendarPanel() {
                         </span>
                       )}
                     </div>
+
                     {/* ステータス（午前/午後の空き） */}
-                    <div className="flex-1 min-w-0">
-                      {dayItems.length > 0 && (
-                        <div
-                          className="mt-0.5 text-[11px] text-neutral-600 truncate"
-                          aria-hidden
-                        >
-                          {slotAvailabilityLabel(counts, 1)}
-                        </div>
-                      )}
+                    {/* ステータス（午前/午後の状態を強調表示） */}
+                    <div className="flex-1 min-w-0 mt-1">
+                      {(() => {
+                        const label = slotStateLabel(slotState);
+                        if (!label) return null; // 両openのときは非表示
+
+                        const style =
+                          label === "満席"
+                            ? "text-[18px] font-semibold text-red-600"
+                            : label.includes("保留")
+                            ? "text-[18px] font-semibold text-amber-600"
+                            : "text-[18px] text-neutral-600";
+
+                        return (
+                          <div className={`${style} truncate`} aria-hidden>
+                            {label}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* 右下バッジ（固定配置） */}
@@ -381,7 +434,7 @@ export default function CalendarPanel() {
                       >
                         休
                       </span>
-                    ) : canBook ? (
+                    ) : accepting ? (
                       <button
                         type="button"
                         className="absolute right-1 bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs bg-white hover:bg-gray-50"
@@ -397,6 +450,7 @@ export default function CalendarPanel() {
                     ) : (
                       <span
                         className="pointer-events-none absolute right-1 bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs text-gray-400 bg-gray-50"
+                        title={closeReason(slotState)}
                         aria-hidden
                       >
                         停
@@ -414,7 +468,7 @@ export default function CalendarPanel() {
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
           >
-            <div className="flex items-center justify-between px-2 pb-2">
+            <div className="flex itemscenter justify-between px-2 pb-2">
               <span className="text-sm text-gray-600">
                 {new Date(calCursor).getFullYear()}年{" "}
                 {new Date(calCursor).getMonth() + 1}月・モバイル表示
@@ -465,15 +519,13 @@ export default function CalendarPanel() {
                 <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden bg-white">
                   {windowCells.map((cell) => {
                     const dayItems = dayMap[cell.dateStr] ?? [];
-                    const counts = dayItems.reduce<SlotCounts>(
-                      (acc, r) => {
-                        if (isAmPm(r.slot)) acc[r.slot] = acc[r.slot] + 1;
-                        return acc;
-                      },
-                      { am: 0, pm: 0 }
-                    );
+                    const slotState = summarizeSlots(dayItems);
                     const isToday = cell.dateStr === toDateStr(new Date());
                     const isWeekendCell = isWeekendStr(cell.dateStr);
+                    const accepting =
+                      !isWeekendCell &&
+                      isBookable(cell.dateStr) &&
+                      !isDayClosedBySlots(slotState);
                     const w = ["日", "月", "火", "水", "木", "金", "土"][
                       cell.dow
                     ];
@@ -483,33 +535,27 @@ export default function CalendarPanel() {
                         <div
                           role="button"
                           tabIndex={0}
-                          aria-disabled={
-                            !(!isWeekendCell && isBookable(cell.dateStr))
-                          }
+                          aria-disabled={!accepting}
                           title={
-                            !isWeekendCell && isBookable(cell.dateStr)
+                            accepting
                               ? `${cell.dateStr} に予約を追加`
                               : `${cell.dateStr} の予約を一覧で表示`
                           }
                           onClick={() => {
-                            const canBook =
-                              !isWeekendCell && isBookable(cell.dateStr);
-                            if (canBook) {
+                            if (accepting) {
                               openCreate(cell.dateStr);
-                            } else {
-                              // 週末は無視、平日の非予約日は一覧に反映＋メッセージ
-                              if (!isWeekendCell) {
-                                setFilter((f) => ({
-                                  ...f,
-                                  date: cell.dateStr,
-                                }));
-                                alert("本日以前・停止日は予約できません。");
-                              }
+                            } else if (!isWeekendCell) {
+                              setFilter((f) => ({ ...f, date: cell.dateStr }));
+                              alert(
+                                isDayClosedBySlots(slotState)
+                                  ? closeReason(slotState)
+                                  : "本日以前・停止日は予約できません。"
+                              );
                             }
                           }}
                           className={
                             "relative flex items-center gap-3 px-3 py-3 transition " +
-                            (!isWeekendCell && isBookable(cell.dateStr)
+                            (accepting
                               ? "hover:bg-neutral-50 active:bg-neutral-100 cursor-pointer"
                               : "bg-neutral-50 text-neutral-400 cursor-not-allowed")
                           }
@@ -539,16 +585,30 @@ export default function CalendarPanel() {
                           </div>
 
                           {/* ステータス（午前/午後の空き） */}
-                          <div className="flex-1 min-w-0">
-                            {dayItems.length > 0 && (
-                              <div
-                                className="mt-0.5 text-[11px] text-neutral-600 truncate"
-                                aria-hidden
-                              >
-                                {slotAvailabilityLabel(counts, 1)}
-                              </div>
-                            )}
+                          {/* ステータス（午前/午後の状態を強調表示） */}
+                          <div className="flex-1 min-w-0 mt-1">
+                            {(() => {
+                              const label = slotStateLabel(slotState);
+                              if (!label) return null; // 両openのときは非表示
+
+                              const style =
+                                label === "満席"
+                                  ? "text-[16px] font-semibold text-red-600"
+                                  : label.includes("保留")
+                                  ? "text-[16px] font-semibold text-amber-600"
+                                  : "text-[12px] text-neutral-600";
+
+                              return (
+                                <div
+                                  className={`${style} truncate`}
+                                  aria-hidden
+                                >
+                                  {label}
+                                </div>
+                              );
+                            })()}
                           </div>
+
                           {/* 右端：＋ / 休 / 停 */}
                           {isWeekendCell ? (
                             <div
@@ -557,7 +617,7 @@ export default function CalendarPanel() {
                             >
                               休
                             </div>
-                          ) : isBookable(cell.dateStr) ? (
+                          ) : accepting ? (
                             <button
                               type="button"
                               className="absolute right-3 bottom-2 h-8 w-8 shrink-0 rounded-full border text-base leading-8 text-center bg-white hover:bg-gray-50"
@@ -573,6 +633,7 @@ export default function CalendarPanel() {
                           ) : (
                             <div
                               className="absolute right-3 bottom-2 h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
+                              title={closeReason(slotState)}
                               aria-hidden
                             >
                               停
