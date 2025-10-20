@@ -341,7 +341,6 @@ export default function CalendarPanel() {
               {monthCells.map((cell, i) => {
                 const dayItems = dayMap[cell.dateStr] ?? [];
                 const slotState = summarizeSlots(dayItems);
-                const total = dayItems.length;
                 const isToday = cell.dateStr === toDateStr(new Date());
                 const isWeekendCell = isWeekendStr(cell.dateStr);
 
@@ -391,17 +390,12 @@ export default function CalendarPanel() {
                     <div className="flex items-center justify-between">
                       <span
                         className={
-                          "text-sm " +
+                          "text-lg font-semibold tracking-tight" +
                           (cell.inMonth ? "text-gray-900" : "text-gray-400")
                         }
                       >
                         {cell.day}
                       </span>
-                      {total > 0 && (
-                        <span className="text-[11px] rounded-full px-2 py-0.5 border bg-gray-50">
-                          {total}
-                        </span>
-                      )}
                     </div>
 
                     {/* ステータス（午前/午後の空き） */}
