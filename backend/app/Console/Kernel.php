@@ -23,8 +23,19 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(\Illuminate\Console\Scheduling\Schedule $schedule): void
     {
-    $schedule->command('reservations:cancel-expired-pending --minutes=10')->everyMinute();
-    $schedule->command('reservations:mark-booked-done')->everyMinute();
+        // 期限切れPENDINGの自動キャンセル（直近10分ぶんを対象にする設計は維持）
+        $schedule->command('reservations:cancel-expired-pending --minutes=10')
+            ->hourly()
+            ->withoutOverlapping()
+            ->onOneServer()
+            ->sendOutputTo(storage_path('logs/schedule_cancel_expired.log'));
+
+        // BOOKED→DONE の更新
+        $schedule->command('reservations:mark-booked-done')
+        ->hourly()
+        ->withoutOverlapping()
+        ->onOneServer()
+        ->sendOutputTo(storage_path('logs/schedule_mark_done.log'));
     }
 
     /**
