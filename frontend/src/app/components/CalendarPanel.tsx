@@ -160,6 +160,17 @@ export default function CalendarPanel() {
   const addMonths = (d: Date, n: number) =>
     new Date(d.getFullYear(), d.getMonth() + n, 1);
 
+  // ==== 範囲制限: 今月~翌月のみ ====
+  const TODAY_ANCHOR = startOfMonth(new Date());
+  const MAX_MONTH = addMonths(TODAY_ANCHOR, 1);
+
+  const clampToRange = (d: Date) => {
+    const t = startOfMonth(d);
+    if (t < TODAY_ANCHOR) return TODAY_ANCHOR;
+    if (t > MAX_MONTH) return MAX_MONTH;
+    return t;
+  };
+
   // モバイル用：期間アンカー（1日 or 15日固定） & 横フリック検出
   const [mobileAnchor, setMobileAnchor] = useState<Date>(() =>
     startOfMonth(new Date())
@@ -191,8 +202,13 @@ export default function CalendarPanel() {
       ay = Math.abs(dy);
     const isHorizontal = ax > ay * SWIPE.ratio;
     const passX = ax >= SWIPE.minX;
-    if (isHorizontal && passX)
-      setCalCursor((d) => addMonths(d, dx > 0 ? +1 : -1));
+
+    if (isHorizontal && passX) {
+      setCalCursor((d) => {
+        const next = addMonths(d, dx > 0 ? +1 : -1);
+        return clampToRange(next); // ← 範囲外なら今月/翌月に丸める
+      });
+    }
     setTouchStart(null);
   };
 
@@ -218,10 +234,14 @@ export default function CalendarPanel() {
     return map;
   }, [allItems, monthKey]);
 
+  // ====== ナビ制御フラグ(今月⇔翌月のみ移動可) =====
+  const canGoPrev = startOfMonth(calCursor) > TODAY_ANCHOR;
+  const canGoNext = startOfMonth(calCursor) < MAX_MONTH;
+
   // ===== UI
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-800 md:p-8 p-2 font-sans">
-      <div className="mx-auto w-full md:w-[80%] md:max-w-[1500px] px-2 md:px-0 space-y-6">
+      <div className="mx-auto w-full md:w-[90%] md:max-w-[1500px] px-2 md:px-0 space-y-6">
         <header className="sticky top-0 z-30 -mx-2 md:-mx-6 mb-4 px-3 md:px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/75 bg-white/90 dark:bg-black/30 border-b border-[var(--border)] flex items-center justify-between gap-2">
           {" "}
           <h1 className="text-xl md:text-3xl font-semibold tracking-tight">
@@ -275,11 +295,12 @@ export default function CalendarPanel() {
               <button
                 className="px-3 py-1 rounded-xl border hover:bg-gray-50"
                 onClick={() =>
-                  setCalCursor(
-                    (d) => new Date(d.getFullYear(), d.getMonth() - 1, 1)
+                  setCalCursor((d) => 
+                    clampToRange(new Date(d.getFullYear(), d.getMonth() - 1, 1))
                   )
                 }
                 aria-label="前の月"
+                disabled={!canGoPrev}
               >
                 ←
               </button>
@@ -289,11 +310,12 @@ export default function CalendarPanel() {
               <button
                 className="px-3 py-1 rounded-xl border hover:bg-gray-50"
                 onClick={() =>
-                  setCalCursor(
-                    (d) => new Date(d.getFullYear(), d.getMonth() + 1, 1)
+                  setCalCursor((d) => 
+                    clampToRange(new Date(d.getFullYear(), d.getMonth() + 1, 1))
                   )
                 }
                 aria-label="次の月"
+                disabled={!canGoNext}
               >
                 →
               </button>
