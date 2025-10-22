@@ -585,6 +585,9 @@ export default function CalendarPanel() {
                               : `${cell.dateStr} の予約を一覧で表示`
                           }
                           onClick={() => {
+                            if (isLockedBy25Rule) {
+                              alert("翌月の予約は26日以降に解放されます。")
+                            }
                             if (accepting) {
                               openCreate(cell.dateStr);
                             } else if (!isWeekendCell) {
