@@ -141,7 +141,6 @@ export default function CalendarPanel() {
     setIsCreateOpen(true);
   }
 
- 
   // 次に予約可能な日付（今日の翌日から最大60日先まで）を返す
   function nextBookableDate(fromDateStr: string): string | null {
     const base = new Date(fromDateStr + "T00:00:00");
@@ -292,7 +291,7 @@ export default function CalendarPanel() {
               <button
                 className="px-3 py-1 rounded-xl border hover:bg-gray-50"
                 onClick={() =>
-                  setCalCursor((d) => 
+                  setCalCursor((d) =>
                     clampToRange(new Date(d.getFullYear(), d.getMonth() - 1, 1))
                   )
                 }
@@ -307,7 +306,7 @@ export default function CalendarPanel() {
               <button
                 className="px-3 py-1 rounded-xl border hover:bg-gray-50"
                 onClick={() =>
-                  setCalCursor((d) => 
+                  setCalCursor((d) =>
                     clampToRange(new Date(d.getFullYear(), d.getMonth() + 1, 1))
                   )
                 }
@@ -363,13 +362,29 @@ export default function CalendarPanel() {
                 const isToday = cell.dateStr === toDateStr(new Date());
                 const isWeekendCell = isWeekendStr(cell.dateStr);
 
+                // 月ルールチェック
+                const today = new Date();
+                const nextMonthStart = addMonths(startOfMonth(today), 1);
+
+                const isCellNextMonth =
+                  cell.y === nextMonthStart.getFullYear() &&
+                  cell.m === nextMonthStart.getMonth();
+
+                // 25日ルール（25日までは翌月を停止）
+                const isLockedBy25Rule = isCellNextMonth && today.getDate() < 26;
+
                 // 受付可否: 平日で isBookable かつ「どちらもopen」のときだけ true
                 const accepting =
                   !isWeekendCell &&
                   isBookable(cell.dateStr) &&
-                  !isDayClosedBySlots(slotState);
+                  !isDayClosedBySlots(slotState) &&
+                  !isLockedBy25Rule;
 
                 const onCellClick = () => {
+                  if (isLockedBy25Rule) {
+                    alert("翌月の予約は26日以降に解放されます。");
+                    return;
+                  }
                   if (accepting) {
                     openCreate(cell.dateStr);
                   } else {
@@ -463,7 +478,7 @@ export default function CalendarPanel() {
                     ) : (
                       <span
                         className="pointer-events-none absolute right-1 bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs text-gray-400 bg-gray-50"
-                        title={closeReason(slotState)}
+                        title={isLockedBy25Rule ? "翌月の予定は25日まで停止中" : closeReason(slotState)}
                         aria-hidden
                       >
                         停
@@ -535,10 +550,25 @@ export default function CalendarPanel() {
                     const slotState = summarizeSlots(dayItems);
                     const isToday = cell.dateStr === toDateStr(new Date());
                     const isWeekendCell = isWeekendStr(cell.dateStr);
+
+                                  // 月ルールチェック
+                const today = new Date();
+                const nextMonthStart = addMonths(startOfMonth(today), 1);
+
+              　// このセルが 「本日から見た来月」か？ (dateStrから判定)
+              const d = new Date(cell.dateStr);
+              const isCellNextMonth =
+              d.getFullYear() === nextMonthStart.getFullYear() &&
+              d.getMonth() === nextMonthStart.getMonth();
+                // 25日ルール（25日までは翌月を停止）
+                const isLockedBy25Rule = isCellNextMonth && today.getDate() < 26;
+
+                // 受付可否: 平日で isBookable かつ「どちらもopen」のときだけ true
                     const accepting =
                       !isWeekendCell &&
                       isBookable(cell.dateStr) &&
-                      !isDayClosedBySlots(slotState);
+                      !isDayClosedBySlots(slotState) &&
+                      !isLockedBy25Rule;
                     const w = ["日", "月", "火", "水", "木", "金", "土"][
                       cell.dow
                     ];
@@ -646,7 +676,7 @@ export default function CalendarPanel() {
                           ) : (
                             <div
                               className="absolute right-3 bottom-2 h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
-                              title={closeReason(slotState)}
+                              title={isLockedBy25Rule ? "翌月の予約は25日まで停止中" : closeReason(slotState)}
                               aria-hidden
                             >
                               停

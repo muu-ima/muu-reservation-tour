@@ -105,7 +105,7 @@ export default function ReservationTable({
                   </td>
                   <td
                     className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis"
-                    title={r.kana ?? ""} // 👈 hover時に全文表示
+                    title={r.kana ?? ""} 
                   >
                     {r.kana ?? ""}
                   </td>
