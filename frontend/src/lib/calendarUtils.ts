@@ -1,5 +1,5 @@
 // src/lib/calendarUtils.ts
-import { toDateStr } from "@/lib/dateUtils";
+import { toDateStr } from "@/lib/date";
 
 /** 月グリッド1マス分の情報 */
 export type MonthCell = {

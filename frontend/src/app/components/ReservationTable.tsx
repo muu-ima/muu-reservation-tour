@@ -103,10 +103,16 @@ export default function ReservationTable({
                   <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">
                     {r.first_name ?? ""}
                   </td>
-                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                  <td
+                    className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis"
+                    title={r.kana ?? ""} // 👈 hover時に全文表示
+                  >
                     {r.kana ?? ""}
                   </td>
-                  <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">
+                  <td
+                    className="px-2 py-2 whitespace-nowrap max-w-[176px] truncate"
+                    title={r.email ?? ""}
+                  >
                     {r.email ?? ""}
                   </td>
                   <td className="py-2 px-2 whitespace-nowrap overflow-hidden text-ellipsis">

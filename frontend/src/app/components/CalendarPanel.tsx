@@ -6,8 +6,15 @@ import type { Reservation, Slot } from "@/types/reservation";
 import CreateReservationModal from "@/components/CreateReservationModal";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatIcon from "@/components/ChatIcon";
-import { toDateStr, isWeekendStr, formatMonthJP } from "@/lib/dateUtils";
-
+import {
+  toDateStr,
+  isWeekendStr,
+  formatMonthJP,
+  startOfMonth,
+  endOfMonth,
+  addDays,
+  daysInMonth,
+} from "@/lib/date";
 import { buildMonthCells } from "@/lib/calendarUtils";
 // ============================================
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
@@ -134,17 +141,7 @@ export default function CalendarPanel() {
     setIsCreateOpen(true);
   }
 
-  // 月境界ユーティリティ
-  const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
-  const endOfMonth = (d: Date) =>
-    new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  const daysInMonth = (d: Date) => endOfMonth(d).getDate();
-  const addDays = (d: Date, n: number) => {
-    const x = new Date(d);
-    x.setDate(x.getDate() + n);
-    return x;
-  };
-
+ 
   // 次に予約可能な日付（今日の翌日から最大60日先まで）を返す
   function nextBookableDate(fromDateStr: string): string | null {
     const base = new Date(fromDateStr + "T00:00:00");

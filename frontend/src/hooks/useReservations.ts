@@ -13,7 +13,7 @@ import {
   isWeekendStr,
   nextBusinessDay,
   nextBusinessDayFromStr,
-} from "@/lib/dateUtils";
+} from "@/lib/date";
 import { normalizeStatus } from "@/types/reservation";
 
 // ---- 型（any禁止対策）
