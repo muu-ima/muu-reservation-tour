@@ -71,7 +71,7 @@ function slotStateLabel(s: DaySlotState): string {
   if (s.am === "booked" || s.pm === "booked") return "満席";
 
   // どちらも open なら非表示（空文字）
-  if (s.am === "open" && s.pm !== "open") return "";
+  if (s.am === "open" && s.pm === "open") return "";
 
   // booked は無いが pending がある場合
   if (s.am === "pending" || s.pm === "pending") {
