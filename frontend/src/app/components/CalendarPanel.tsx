@@ -22,6 +22,7 @@ import {
 } from "@/lib/date";
 import { buildMonthCells } from "@/lib/calendarUtils";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useCalendarCursor } from "@/hooks/useCalendarCursor";
 // ============================================
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
 // ※ UIを「見学（tour）専用」に整理。体験（experience）関連UIは撤去。
@@ -93,7 +94,7 @@ function closeReason(s: DaySlotState): string {
 const isCanceled = (s?: Reservation["status"]) => s === "canceled";
 
 export default function CalendarPanel() {
-  // ===== State
+  // ===== データ関連（API側）
   const {
     allItems,
     loading,
@@ -108,22 +109,24 @@ export default function CalendarPanel() {
     getSafeCreateDate,
   } = useReservations();
 
-  // モバイルの半月タブ（前半=1–14 / 後半=15–末）
-  type Half = "first" | "second";
-  const [mobileHalf, setMobileHalf] = useState<Half>("first");
+  // ===== カレンダーUI関連（カーソルや月移動など）
+const {
+  clampToRange,
+  calCursor,
+  setCalCursor,
+  canGoPrev,
+  canGoNext,
 
-  // フリック関連：横だけ生かす
-  const SWIPE = { minX: 48, ratio: 1.5 };
+  mobileHalf,
+  setMobileHalf,
+  mobileAnchor,
+  onTouchStart,
+  onTouchEnd,
+  nextMonthStart,
+} = useCalendarCursor({ monthsAhead: 1 }); // 今月/翌月まで許可
 
   // 表示窓：前半 1〜14日（14日分）、後半 15日〜月末（残り全部）
   const MOBILE_WINDOW_DAYS = 14;
-
-  // カレンダー: 表示中の月（1日固定）
-  const [calCursor, setCalCursor] = useState(() => {
-    const d = new Date();
-    d.setDate(1);
-    return d;
-  });
 
   const monthCells = useMemo(
     () => buildMonthCells(calCursor, true),
@@ -150,20 +153,7 @@ export default function CalendarPanel() {
     [getSafeCreateDate, isBookable]
   );
 
-  const TODAY_ANCHOR = startOfMonth(new Date());
-  const MAX_MONTH = addMonths(TODAY_ANCHOR, 1);
-
-    const clampToRange = useCallback(
-    (d: Date) => {
-      const t = startOfMonth(d);
-      if (t < TODAY_ANCHOR) return TODAY_ANCHOR;
-      if (t > MAX_MONTH) return MAX_MONTH;
-      return t;
-    },
-    [TODAY_ANCHOR, MAX_MONTH]
-  );
-
-  const sp = useSearchParams();
+   const sp = useSearchParams();
   const router = useRouter();
   const didPrefill = useRef(false); // ← 二重オープン防止
 
@@ -191,7 +181,7 @@ export default function CalendarPanel() {
       didPrefill.current = true;
       router.replace("/calendar", { scroll: false });
     }
-  }, [sp, router, openCreate, clampToRange]);
+  }, [sp, router, openCreate, clampToRange, setCalCursor]);
 
   // 次に予約可能な日付（今日の翌日から最大60日先まで）を返す
   function nextBookableDate(fromDateStr: string): string | null {
@@ -209,46 +199,7 @@ function addMonths(d: Date, n: number) {
   return new Date(d.getFullYear(), d.getMonth() + n, 1);
 }
 
-  // モバイル用：期間アンカー（1日 or 15日固定） & 横フリック検出
-  const [mobileAnchor, setMobileAnchor] = useState<Date>(() =>
-    startOfMonth(new Date())
-  );
-  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(
-    null
-  );
   const mobileListRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    setMobileAnchor(startOfMonth(new Date(calCursor)));
-  }, [calCursor]);
-  useEffect(() => {
-    const first = startOfMonth(calCursor);
-    const day = mobileHalf === "first" ? 1 : 15;
-    setMobileAnchor(new Date(first.getFullYear(), first.getMonth(), day));
-  }, [calCursor, mobileHalf]);
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    const t = e.changedTouches[0];
-    setTouchStart({ x: t.clientX, y: t.clientY });
-  };
-  const onTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStart) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - touchStart.x;
-    const dy = t.clientY - touchStart.y;
-    const ax = Math.abs(dx),
-      ay = Math.abs(dy);
-    const isHorizontal = ax > ay * SWIPE.ratio;
-    const passX = ax >= SWIPE.minX;
-
-    if (isHorizontal && passX) {
-      setCalCursor((d) => {
-        const next = addMonths(d, dx > 0 ? +1 : -1);
-        return clampToRange(next); // ← 範囲外なら今月/翌月に丸める
-      });
-    }
-    setTouchStart(null);
-  };
 
   useEffect(() => {
     fetchAllReservations(); // ← hook から取得した関数
@@ -272,10 +223,7 @@ function addMonths(d: Date, n: number) {
     return map;
   }, [allItems, monthKey]);
 
-  // ====== ナビ制御フラグ(今月⇔翌月のみ移動可) =====
-  const canGoPrev = startOfMonth(calCursor) > TODAY_ANCHOR;
-  const canGoNext = startOfMonth(calCursor) < MAX_MONTH;
-
+ 
   // ===== UI
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-800 md:p-8 p-2 font-sans">
@@ -406,8 +354,7 @@ function addMonths(d: Date, n: number) {
 
                 // 月ルールチェック
                 const today = new Date();
-                const nextMonthStart = addMonths(startOfMonth(today), 1);
-
+               
                 const isCellNextMonth =
                   cell.y === nextMonthStart.getFullYear() &&
                   cell.m === nextMonthStart.getMonth();
