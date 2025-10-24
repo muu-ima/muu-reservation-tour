@@ -5,6 +5,7 @@ use App\Http\Controllers\AvailabilityController;
 use App\Http\Middleware\DevCors;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V2\AvailabilityController as V2AvailabilityController;
 
 
 /*
@@ -40,5 +41,10 @@ Route::middleware([DevCors::class])->group(function () {
             'ts' => now()->toIso8601String(),
             'app' => config('app.name'),
         ], 200);
+    });
+
+    // 🔹 v2 API (CORSも有効)
+    Route::prefix('v2')->group(function () {
+        Route::get('/availabilities/next', [V2AvailabilityController::class, 'next']);
     });
 });
