@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useReservations } from "@/hooks/useReservations";
 import type { Reservation, Slot } from "@/types/reservation";
 import CreateReservationModal from "@/components/CreateReservationModal";
@@ -15,6 +21,7 @@ import {
   daysInMonth,
 } from "@/lib/date";
 import { buildMonthCells } from "@/lib/calendarUtils";
+import { useSearchParams, useRouter } from "next/navigation";
 // ============================================
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
 // ※ UIを「見学（tour）専用」に整理。体験（experience）関連UIは撤去。
@@ -129,16 +136,62 @@ export default function CalendarPanel() {
   const [createDate, setCreateDate] = useState<string | undefined>(undefined);
   const [createSlot, setCreateSlot] = useState<Slot | undefined>(undefined);
 
-  function openCreate(dateStr?: string, slot?: Slot) {
-    const safe = getSafeCreateDate(dateStr);
-    if (!isBookable(safe)) {
-      alert("本日以前や土日・停止日には予約を追加できません。");
-      return;
+  const openCreate = useCallback(
+    (dateStr?: string, slot?: Slot) => {
+      const safe = getSafeCreateDate(dateStr);
+      if (!isBookable(safe)) {
+        alert("本日以前や土日・停止日には予約を追加できません。");
+        return;
+      }
+      setCreateDate(safe);
+      setCreateSlot(slot);
+      setIsCreateOpen(true);
+    },
+    [getSafeCreateDate, isBookable]
+  );
+
+  const TODAY_ANCHOR = startOfMonth(new Date());
+  const MAX_MONTH = addMonths(TODAY_ANCHOR, 1);
+
+    const clampToRange = useCallback(
+    (d: Date) => {
+      const t = startOfMonth(d);
+      if (t < TODAY_ANCHOR) return TODAY_ANCHOR;
+      if (t > MAX_MONTH) return MAX_MONTH;
+      return t;
+    },
+    [TODAY_ANCHOR, MAX_MONTH]
+  );
+
+  const sp = useSearchParams();
+  const router = useRouter();
+  const didPrefill = useRef(false); // ← 二重オープン防止
+
+  // ✅ prefill で自動オープン（依存配列も正しく）
+  useEffect(() => {
+    if (didPrefill.current) return;
+
+    const prefill = sp.get("prefill");
+    const slot = sp.get("slot");
+
+    if (prefill) {
+      const d = new Date(prefill);
+      if (Number.isNaN(d.getTime())) return;
+
+      setCalCursor(() =>
+        clampToRange(new Date(d.getFullYear(), d.getMonth(), 1))
+      );
+
+      if (slot === "am" || slot === "pm") {
+        openCreate(prefill, slot as Slot);
+      } else {
+        openCreate(prefill);
+      }
+
+      didPrefill.current = true;
+      router.replace("/calendar", { scroll: false });
     }
-    setCreateDate(safe);
-    setCreateSlot(slot);
-    setIsCreateOpen(true);
-  }
+  }, [sp, router, openCreate, clampToRange]);
 
   // 次に予約可能な日付（今日の翌日から最大60日先まで）を返す
   function nextBookableDate(fromDateStr: string): string | null {
@@ -152,19 +205,9 @@ export default function CalendarPanel() {
     return null;
   }
 
-  const addMonths = (d: Date, n: number) =>
-    new Date(d.getFullYear(), d.getMonth() + n, 1);
-
-  // ==== 範囲制限: 今月~翌月のみ ====
-  const TODAY_ANCHOR = startOfMonth(new Date());
-  const MAX_MONTH = addMonths(TODAY_ANCHOR, 1);
-
-  const clampToRange = (d: Date) => {
-    const t = startOfMonth(d);
-    if (t < TODAY_ANCHOR) return TODAY_ANCHOR;
-    if (t > MAX_MONTH) return MAX_MONTH;
-    return t;
-  };
+function addMonths(d: Date, n: number) {
+  return new Date(d.getFullYear(), d.getMonth() + n, 1);
+}
 
   // モバイル用：期間アンカー（1日 or 15日固定） & 横フリック検出
   const [mobileAnchor, setMobileAnchor] = useState<Date>(() =>
@@ -370,7 +413,8 @@ export default function CalendarPanel() {
                   cell.m === nextMonthStart.getMonth();
 
                 // 25日ルール（25日までは翌月を停止）
-                const isLockedBy25Rule = isCellNextMonth && today.getDate() < 26;
+                const isLockedBy25Rule =
+                  isCellNextMonth && today.getDate() < 26;
 
                 // 受付可否: 平日で isBookable かつ「どちらもopen」のときだけ true
                 const accepting =
@@ -477,7 +521,11 @@ export default function CalendarPanel() {
                     ) : (
                       <span
                         className="pointer-events-none absolute right-1 bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs text-gray-400 bg-gray-50"
-                        title={isLockedBy25Rule ? "翌月の予定は25日まで停止中" : closeReason(slotState)}
+                        title={
+                          isLockedBy25Rule
+                            ? "翌月の予定は25日まで停止中"
+                            : closeReason(slotState)
+                        }
                         aria-hidden
                       >
                         停
@@ -495,7 +543,7 @@ export default function CalendarPanel() {
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
           >
-            <div className="flex itemscenter justify-between px-2 pb-2">
+            <div className="flex items-center justify-between px-2 pb-2">
               <span className="text-sm text-gray-600">
                 {new Date(calCursor).getFullYear()}年{" "}
                 {new Date(calCursor).getMonth() + 1}月・モバイル表示
@@ -550,19 +598,19 @@ export default function CalendarPanel() {
                     const isToday = cell.dateStr === toDateStr(new Date());
                     const isWeekendCell = isWeekendStr(cell.dateStr);
 
-                                  // 月ルールチェック
-                const today = new Date();
-                const nextMonthStart = addMonths(startOfMonth(today), 1);
+                    // 月ルールチェック
+                    const today = new Date();
+                    const nextMonthStart = addMonths(startOfMonth(today), 1); // このセルが 「本日から見た来月」か？ (dateStrから判定)
 
-              　// このセルが 「本日から見た来月」か？ (dateStrから判定)
-              const d = new Date(cell.dateStr);
-              const isCellNextMonth =
-              d.getFullYear() === nextMonthStart.getFullYear() &&
-              d.getMonth() === nextMonthStart.getMonth();
-                // 25日ルール（25日までは翌月を停止）
-                const isLockedBy25Rule = isCellNextMonth && today.getDate() < 26;
+                    const d = new Date(cell.dateStr);
+                    const isCellNextMonth =
+                      d.getFullYear() === nextMonthStart.getFullYear() &&
+                      d.getMonth() === nextMonthStart.getMonth();
+                    // 25日ルール（25日までは翌月を停止）
+                    const isLockedBy25Rule =
+                      isCellNextMonth && today.getDate() < 26;
 
-                // 受付可否: 平日で isBookable かつ「どちらもopen」のときだけ true
+                    // 受付可否: 平日で isBookable かつ「どちらもopen」のときだけ true
                     const accepting =
                       !isWeekendCell &&
                       isBookable(cell.dateStr) &&
@@ -585,7 +633,7 @@ export default function CalendarPanel() {
                           }
                           onClick={() => {
                             if (isLockedBy25Rule) {
-                              alert("翌月の予約は26日以降に解放されます。")
+                              alert("翌月の予約は26日以降に解放されます。");
                             }
                             if (accepting) {
                               openCreate(cell.dateStr);
@@ -678,7 +726,11 @@ export default function CalendarPanel() {
                           ) : (
                             <div
                               className="absolute right-3 bottom-2 h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
-                              title={isLockedBy25Rule ? "翌月の予約は25日まで停止中" : closeReason(slotState)}
+                              title={
+                                isLockedBy25Rule
+                                  ? "翌月の予約は25日まで停止中"
+                                  : closeReason(slotState)
+                              }
                               aria-hidden
                             >
                               停
