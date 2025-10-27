@@ -129,7 +129,7 @@ const {
   const MOBILE_WINDOW_DAYS = 14;
 
   const monthCells = useMemo(
-    () => buildMonthCells(calCursor, true),
+    () => buildMonthCells(calCursor, "tail"),
     [calCursor]
   );
   const monthKey = useMemo(() => toDateStr(calCursor).slice(0, 7), [calCursor]); // YYYY-MM
