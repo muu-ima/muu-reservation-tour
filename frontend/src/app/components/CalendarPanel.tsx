@@ -110,20 +110,20 @@ export default function CalendarPanel() {
   } = useReservations();
 
   // ===== カレンダーUI関連（カーソルや月移動など）
-const {
-  clampToRange,
-  calCursor,
-  setCalCursor,
-  canGoPrev,
-  canGoNext,
+  const {
+    clampToRange,
+    calCursor,
+    setCalCursor,
+    canGoPrev,
+    canGoNext,
 
-  mobileHalf,
-  setMobileHalf,
-  mobileAnchor,
-  onTouchStart,
-  onTouchEnd,
-  nextMonthStart,
-} = useCalendarCursor({ monthsAhead: 1 }); // 今月/翌月まで許可
+    mobileHalf,
+    setMobileHalf,
+    mobileAnchor,
+    onTouchStart,
+    onTouchEnd,
+    nextMonthStart,
+  } = useCalendarCursor({ monthsAhead: 1 }); // 今月/翌月まで許可
 
   // 表示窓：前半 1〜14日（14日分）、後半 15日〜月末（残り全部）
   const MOBILE_WINDOW_DAYS = 14;
@@ -153,7 +153,7 @@ const {
     [getSafeCreateDate, isBookable]
   );
 
-   const sp = useSearchParams();
+  const sp = useSearchParams();
   const router = useRouter();
   const didPrefill = useRef(false); // ← 二重オープン防止
 
@@ -195,9 +195,9 @@ const {
     return null;
   }
 
-function addMonths(d: Date, n: number) {
-  return new Date(d.getFullYear(), d.getMonth() + n, 1);
-}
+  function addMonths(d: Date, n: number) {
+    return new Date(d.getFullYear(), d.getMonth() + n, 1);
+  }
 
   const mobileListRef = useRef<HTMLDivElement | null>(null);
 
@@ -218,29 +218,54 @@ function addMonths(d: Date, n: number) {
       if (r.program !== "tour") return;
       if (isCanceled(r.status)) return; // 👈 キャンセルは描画対象から除外
       const ds = toDateStr(r.date);
-      if (ds.startsWith(monthKey)) (map[ds] ||= []).push(r);
+      (map[ds] ||= []).push(r);
     });
     return map;
-  }, [allItems, monthKey]);
+  }, [allItems]);
 
- 
   // ===== UI
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-800 md:p-8 p-2 font-sans">
       <div className="mx-auto w-full md:w-[90%] md:max-w-[1500px] px-2 md:px-0 space-y-6">
-        <header className="sticky top-0 z-30 -mx-2 md:-mx-6 mb-4 px-3 md:px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/75 bg-white/90 dark:bg-black/30 border-b border-[var(--border)] flex items-center justify-between gap-2">
-          {" "}
-          <h1 className="text-xl md:text-3xl font-semibold tracking-tight">
-            予約カレンダー
-          </h1>
-          <div className="flex items-center gap-1 md:gap-2 flex-nowrap whitespace-nowrap">
+        <header
+          className={[
+            "sticky top-0 z-30 -mx-2 md:-mx-6 mb-4",
+            "px-3 md:px-6 py-3",
+            "backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/90",
+            "border-b border-neutral-200",
+            "flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4",
+          ].join(" ")}
+        >
+          {/* 左側: タイトル＆サブ */}
+          <div className="flex flex-col">
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-[16px] md:text-[20px] font-semibold tracking-tight text-neutral-900">
+                予約カレンダー
+              </h1>
+            </div>
+
+            <p className="text-[12px] md:text-[13px] text-neutral-500 leading-snug">
+              当日〜60日先までの受付状況と新規予約の作成
+            </p>
+          </div>
+
+          {/* 右側: アクションボタン群 */}
+          <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap">
+            {/* 更新ボタン（セカンダリ） */}
             <button
               onClick={fetchReservations}
-              className="px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base rounded-xl bg-white ring-1 ring-neutral-300 hover:bg-neutral-50 disabled:opacity-50"
               disabled={loading}
+              className={[
+                "rounded-lg border border-neutral-300 bg-white/80",
+                "px-3 py-1.5 md:px-3.5 md:py-2",
+                "text-[13px] md:text-[14px] font-medium text-neutral-700",
+                "hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed",
+              ].join(" ")}
             >
               {loading ? "更新中…" : "更新"}
             </button>
+
+            {/* 新規予約（プライマリ） */}
             <button
               onClick={() => {
                 const today = toDateStr(new Date());
@@ -251,7 +276,12 @@ function addMonths(d: Date, n: number) {
                   alert("直近60日内に予約可能な日がありません。");
                 }
               }}
-              className="px-3 py-1.5 md:px-4 md:py-2 text-sm md:text-base rounded-xl bg-neutral-900 text-white hover:bg-neutral-800"
+              className={[
+                "rounded-lg bg-neutral-900 text-white",
+                "px-3 py-1.5 md:px-3.5 md:py-2",
+                "text-[13px] md:text-[14px] font-semibold leading-none",
+                "hover:bg-neutral-800 active:scale-[0.99] transition",
+              ].join(" ")}
             >
               ＋ 新規予約
             </button>
@@ -354,7 +384,7 @@ function addMonths(d: Date, n: number) {
 
                 // 月ルールチェック
                 const today = new Date();
-               
+
                 const isCellNextMonth =
                   cell.y === nextMonthStart.getFullYear() &&
                   cell.m === nextMonthStart.getMonth();
@@ -397,7 +427,7 @@ function addMonths(d: Date, n: number) {
                     tabIndex={0}
                     onClick={onCellClick}
                     className={[
-                      "relative h-32 rounded-2xl bg-white/90 text-left p-3 transition",
+                      "relative h-32 rounded-xl border border-neutral-200 bg-white/90 text-left p-3 transition",
                       "ring-1 ring-neutral-200 hover:ring-neutral-300 hover:shadow-md",
                       cell.inMonth ? "text-neutral-800" : "text-neutral-400",
                       isToday ? "bg-neutral-50 ring-2 ring-neutral-800" : "",
@@ -413,10 +443,12 @@ function addMonths(d: Date, n: number) {
                   >
                     <div className="flex items-center justify-between">
                       <span
-                        className={
-                          "text-lg font-semibold tracking-tight" +
-                          (cell.inMonth ? "text-gray-900" : "text-gray-400")
-                        }
+                        className={[
+                          "leading-none tracking-tight",
+                          cell.inMonth
+                            ? "text-[18px] font-semibold text-neutral-900"
+                            : "text-[18px] font-semibold text-neutral-400",
+                        ].join(" ")}
                       >
                         {cell.day}
                       </span>
