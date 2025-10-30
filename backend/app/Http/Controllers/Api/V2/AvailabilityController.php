@@ -38,39 +38,71 @@ class AvailabilityController extends Controller
                 continue;
             }
 
-            // 翌月ロック（allowNextMonth=1 なら解除）
+            // 25日ルール（allowNextMonth=1なら解除）
             if (
                 $lockNextMonth && !$allowNext &&
                 Carbon::parse($date, 'Asia/Tokyo')->greaterThanOrEqualTo($nextMonthStart)
             ) {
                 if ($debug) $reasons[] = ['date' => $date, 'reason' => 'locked-next-month'];
-                continue;
+                continue; // 跨ぐ
             }
 
-            // 休業日
-            if (Arr::get($d, 'closed') === true) {
-                if ($debug) $reasons[] = ['date' => $date, 'reason' => 'closed'];
+            // === 状態取得（表現ゆれ吸収） ===
+            $am = Arr::get($d, 'am');
+            $pm = Arr::get($d, 'pm');
+            $flags = (array) Arr::get($d, 'flags', []);
+
+            $hasAMOpen = ($am === true || $am === 'open')
+                || in_array('am', (array) Arr::get($d, 'slots', []), true)
+                || in_array('am', (array) Arr::get($d, 'available', []), true);
+
+            $hasPMOpen = ($pm === true || $pm === 'open')
+                || in_array('pm', (array) Arr::get($d, 'slots', []), true)
+                || in_array('pm', (array) Arr::get($d, 'available', []), true);
+
+            // === 跨ぐべき条件（全部スキップ） ===
+            $isClosedDay = Arr::get($d, 'closed') === true || $am === 'closed' || $pm === 'closed';
+            $isStopped   = $am === 'stopped' || $pm === 'stopped'
+                || Arr::get($d, 'stopped') === true || Arr::get($d, 'stop') === true
+                || in_array('stopped', $flags, true);
+
+            $isPending   = $am === 'pending' || $pm === 'pending'
+                || in_array('pending', $flags, true)
+                || Arr::get($d, 'amStatus') === 'pending' || Arr::get($d, 'pmStatus') === 'pending';
+
+            $isBooked    = $am === 'booked' || $pm === 'booked'
+                || in_array('am_booked', $flags, true) || in_array('pm_booked', $flags, true)
+                || Arr::get($d, 'amStatus') === 'booked' || Arr::get($d, 'pmStatus') === 'booked';
+
+            if ($isClosedDay) {
+                if ($debug) $reasons[] = ['date' => $date, 'reason' => 'closed-skip'];
                 continue;
             }
+            if ($isStopped) {
+                if ($debug) $reasons[] = ['date' => $date, 'reason' => 'stopped-skip'];
+                continue;
+            }
+            if ($isPending) {
+                if ($debug) $reasons[] = ['date' => $date, 'reason' => 'pending-skip'];
+                continue;
+            }
+            if ($isBooked) {
+                if ($debug) $reasons[] = ['date' => $date, 'reason' => 'booked-skip'];
+                continue; // ← ここを break ではなく continue に
+            }
 
-            // 空き判定（表現ゆれ対応）
-            $hasAM = Arr::get($d, 'am') === true
-                || in_array('am', Arr::get($d, 'slots', []), true)
-                || in_array('am', Arr::get($d, 'available', []), true);
+            // === 採用条件：両方 open の日だけ ===
+            if ($hasAMOpen && $hasPMOpen) {
+                return response()->json([
+                    'date'    => $date,
+                    'slot'    => 'am',   // 既定は am（必要なら pm でも可）
+                    'program' => $program,
+                ]);
+            }
 
-            $hasPM = Arr::get($d, 'pm') === true
-                || in_array('pm', Arr::get($d, 'slots', []), true)
-                || in_array('pm', Arr::get($d, 'available', []), true);
-
-            $count = Arr::get($d, 'count') ?? Arr::get($d, 'availableCount');
-
-            if ($hasAM) return response()->json(['date' => $date, 'slot' => 'am', 'program' => $program]);
-            if ($hasPM) return response()->json(['date' => $date, 'slot' => 'pm', 'program' => $program]);
-            if (is_numeric($count) && (int)$count > 0)
-                return response()->json(['date' => $date, 'slot' => 'am', 'program' => $program]);
-
-            if ($debug) $reasons[] = ['date' => $date, 'reason' => 'no-slot'];
+            if ($debug) $reasons[] = ['date' => $date, 'reason' => 'not-both-open'];
         }
+
 
         // ← ここで next() をきちんと閉じるのが超重要！
         return response()->json([
@@ -163,12 +195,12 @@ class AvailabilityController extends Controller
         $today = Carbon::now('Asia/Tokyo')->startOfDay();
 
         // リードタイム (例：当日予約NG -> LeadDays=1)
-        if($c->lt($today->copy()->addDays($leadDays))) {
+        if ($c->lt($today->copy()->addDays($leadDays))) {
             return true;
         }
 
         // 土日は休業
-        if($c->isSaturday() || $c->isSunday()) {
+        if ($c->isSaturday() || $c->isSunday()) {
             $closed = true;
         } else {
             $closed = false;
