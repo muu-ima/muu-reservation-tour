@@ -243,10 +243,6 @@ export default function CalendarPanel() {
                 予約カレンダー
               </h1>
             </div>
-
-            <p className="text-[12px] md:text-[13px] text-neutral-500 leading-snug">
-              当日〜60日先までの受付状況と新規予約の作成
-            </p>
           </div>
 
           {/* 右側: アクションボタン群 */}
