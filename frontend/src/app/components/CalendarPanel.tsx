@@ -244,7 +244,7 @@ export default function CalendarPanel() {
           <div className="flex flex-col">
             <h1
               className={[
-                "text-[20px] md:text-[22px] font-semibold tracking-tight",
+                "text-[21px] md:text-[23px] font-semibold tracking-tight",
                 "bg-gradient-to-r from-neutral-900 to-neutral-600 bg-clip-text text-transparent",
                 "dark:from-white dark:to-neutral-300",
               ].join(" ")}
@@ -253,7 +253,8 @@ export default function CalendarPanel() {
             </h1>
 
             <p
-className="text-[14px] text-blue-600 font-medium cursor-pointer mt-1 leading-tight hover:text-blue-700 transition-all"              onMouseEnter={() => setShowSpotlight(true)}
+              className="text-[14px] text-blue-600 font-medium cursor-pointer mt-1 leading-tight hover:text-blue-700 transition-all"
+              onMouseEnter={() => setShowSpotlight(true)}
               onMouseLeave={() => setShowSpotlight(false)}
               onClick={() => setShowSpotlight(true)}
             >
@@ -534,15 +535,6 @@ className="text-[14px] text-blue-600 font-medium cursor-pointer mt-1 leading-tig
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
           >
-            <div className="flex items-center justify-between px-2 pb-2">
-              <span className="text-sm text-gray-600">
-                {new Date(calCursor).getFullYear()}年{" "}
-                {new Date(calCursor).getMonth() + 1}月・モバイル表示
-              </span>
-              <span className="text-[11px] text-gray-400">
-                横:月移動 ／ タブ:前半・後半
-              </span>
-            </div>
             {/* ▼ モバイル前半／後半トグル */}
             <div className="flex justify-center gap-2 mb-3">
               <button
@@ -734,14 +726,7 @@ className="text-[14px] text-blue-600 font-medium cursor-pointer mt-1 leading-tig
                 </ul>
               );
             })()}
-
-            <p className="mt-2 text-xs text-gray-500">
-              横フリック＝月移動／タブで「前半・後半」を切り替え。日付タップで一覧に反映。
-            </p>
           </div>
-          <p className="text-xs text-gray-500">
-            日付タップで一覧に反映。右下「＋」でその日に新規作成。
-          </p>
         </section>
 
         <footer className="text-xs text-gray-500 pt-4">
