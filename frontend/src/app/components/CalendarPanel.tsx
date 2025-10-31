@@ -23,7 +23,7 @@ import {
 import { buildMonthCells } from "@/lib/calendarUtils";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useCalendarCursor } from "@/hooks/useCalendarCursor";
-import  ChatSpotlight  from "@/components/ChatSpotlight"
+import ChatSpotlight from "@/components/ChatSpotlight";
 // ============================================
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
 // ※ UIを「見学（tour）専用」に整理。体験（experience）関連UIは撤去。
@@ -232,47 +232,52 @@ export default function CalendarPanel() {
       <div className="mx-auto w-full md:w-[90%] md:max-w-[1500px] px-2 md:px-0 space-y-6">
         <header
           className={[
-            "sticky top-0 z-30 -mx-2 md:-mx-6 mb-4",
-            "px-3 md:px-6 py-3",
-            "backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/90",
-            "border-b border-neutral-200",
-            "flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4",
+            "sticky top-0 z-30 -mx-2 md:-mx-6 mb-6",
+            "px-4 md:px-8 py-4",
+            // ✨ 背景をガラス風に
+            "backdrop-blur-md supports-[backdrop-filter]:bg-white/60 bg-white/80 dark:bg-neutral-900/60",
+            "border-b border-neutral-200 dark:border-neutral-700 shadow-[0_2px_10px_rgba(0,0,0,0.05)]",
+            "flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-6",
           ].join(" ")}
         >
-          {/* 左側: タイトル＆サブ */}
+          {/* === 左側: タイトル + サブリンク === */}
           <div className="flex flex-col">
-            <div className="flex items-baseline gap-2">
-              <h1 className="text-[16px] md:text-[20px] font-semibold tracking-tight text-neutral-900">
-                予約カレンダー
-              </h1>
-            </div>
-          </div>
-          <p
-            className="text-sm text-blue-600 cursor-pointer mt-2 hover:underline"
-            onMouseEnter={() => setShowSpotlight(true)}
-            onMouseLeave={() => setShowSpotlight(false)}
-            onClick={() => setShowSpotlight(true)}
-          >
-            💬 予約の取り方をチャットボットで確認する
-          </p>
+            <h1
+              className={[
+                "text-[20px] md:text-[22px] font-semibold tracking-tight",
+                "bg-gradient-to-r from-neutral-900 to-neutral-600 bg-clip-text text-transparent",
+                "dark:from-white dark:to-neutral-300",
+              ].join(" ")}
+            >
+              予約カレンダー
+            </h1>
 
-          {/* 右側: アクションボタン群 */}
-          <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap">
-            {/* 更新ボタン（セカンダリ） */}
+            <p
+className="text-[14px] text-blue-600 font-medium cursor-pointer mt-1 leading-tight hover:text-blue-700 transition-all"              onMouseEnter={() => setShowSpotlight(true)}
+              onMouseLeave={() => setShowSpotlight(false)}
+              onClick={() => setShowSpotlight(true)}
+            >
+              💬 予約の取り方をチャットボットで確認する
+            </p>
+          </div>
+
+          {/* === 右側: アクションボタン群 === */}
+          <div className="flex items-center gap-3 flex-nowrap whitespace-nowrap">
+            {/* 更新ボタン */}
             <button
               onClick={fetchReservations}
               disabled={loading}
               className={[
-                "rounded-lg border border-neutral-300 bg-white/80",
-                "px-3 py-1.5 md:px-3.5 md:py-2",
-                "text-[13px] md:text-[14px] font-medium text-neutral-700",
-                "hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed",
+                "rounded-xl border border-neutral-300 bg-white/70 backdrop-blur-sm",
+                "px-3.5 py-2 text-[14px] font-medium text-neutral-700 shadow-sm",
+                "hover:bg-white hover:shadow-md hover:-translate-y-[1px]",
+                "disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300",
               ].join(" ")}
             >
               {loading ? "更新中…" : "更新"}
             </button>
 
-            {/* 新規予約（プライマリ） */}
+            {/* 新規予約ボタン */}
             <button
               onClick={() => {
                 const today = toDateStr(new Date());
@@ -284,10 +289,10 @@ export default function CalendarPanel() {
                 }
               }}
               className={[
-                "rounded-lg bg-neutral-900 text-white",
-                "px-3 py-1.5 md:px-3.5 md:py-2",
-                "text-[13px] md:text-[14px] font-semibold leading-none",
-                "hover:bg-neutral-800 active:scale-[0.99] transition",
+                "rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 text-white",
+                "px-4 py-2 text-[14px] font-semibold shadow-md",
+                "hover:from-blue-600 hover:to-blue-800 hover:shadow-lg hover:-translate-y-[1px]",
+                "active:scale-[0.98] transition-all duration-300",
               ].join(" ")}
             >
               ＋ 新規予約
