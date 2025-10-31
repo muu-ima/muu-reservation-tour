@@ -26,11 +26,15 @@ services:
     container_name: next-frontend
     ports:
       - "3000:3000"
-    user: "${UID:-1000}:${GID:-1000}"
+
+    # 👇 user は削除。rootで動くので npm install 時のEACCESを防止
+    # user: "${UID:-1000}:${GID:-1000}"
+
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - node_modules:/app/node_modules  # ← 永続化ボリューム
       - ./frontend/.env.local:/app/.env.local
+
     environment:
       - NODE_ENV=development
     command: npm run dev
@@ -56,14 +60,15 @@ services:
     container_name: mailpit
     restart: always
     ports:
-      - "8025:8025"   # UI
-      - "1025:1025"   # SMTP
+      - "8025:8025"
+      - "1025:1025"
     environment:
       - MP_MAX_MESSAGES=5000
-      - MP_DATABASE=/data/mailpit.db   # ← 推奨キー
+      - MP_DATABASE=/data/mailpit.db
     volumes:
-      - mailpit_data:/data             # ← ボリュームを正しく参照
+      - mailpit_data:/data
 
 volumes:
   dbdata:
   mailpit_data:
+  node_modules:  # ← Next.js の依存を保持

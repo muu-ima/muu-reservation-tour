@@ -21,10 +21,24 @@ const treeData: Record<string, Node> = {
     id: "start",
     text: "何について知りたいですか？",
     options: [
+      {
+        text: "カレンダーから予約を入れる方法を知りたい",
+        nextId: "howToReserve",
+      },
       { text: "アクセスについて知りたい", nextId: "access" },
       { text: "利用開始について知りたい", nextId: "startGuide" },
       { text: "問い合わせについて", nextId: "contact" },
     ],
+  },
+  howToReserve: {
+    id: "howToReserve",
+    text: `予約の入れ方は次の通りです：
+
+① カレンダーの空いている日をクリックします。
+② 右下の「＋」ボタンを押すと予約作成画面が開きます。
+③ 必要事項を入力し、送信します。
+
+※ 満席や保留日はクリックしても追加できません。`,
   },
   access: {
     id: "access",
@@ -102,7 +116,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
           paddingBottom: 8,
         }}
       >
-        <h2 style={{ margin: 0, fontSize: 18, color: "#333" }}>簡単チャットボット</h2>
+        <h2 style={{ margin: 0, fontSize: 18, color: "#333" }}>
+          簡単チャットボット
+        </h2>
         <button
           onClick={onClose}
           aria-label="チャットを閉じる"
@@ -122,10 +138,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
       </div>
 
       {/* 質問文 */}
-      <p style={{ color: "#555", fontSize: 16, marginBottom: 20 }}>{currentNode.text}</p>
+      <p
+        style={{
+          color: "#555",
+          fontSize: 16,
+          marginBottom: 20,
+          whiteSpace: "pre-line", // ← 追加：\n を改行として表示
+          lineHeight: 1.6, // ← お好みで
+        }}
+      >
+        {currentNode.text}
+      </p>
 
       {/* ボタン群 */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, flexGrow: 1 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          flexGrow: 1,
+        }}
+      >
         {currentNode.options?.map((option, idx) => (
           <button
             key={idx}
@@ -140,8 +173,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
               cursor: "pointer",
               transition: "background-color 0.3s",
             }}
-            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#115293")}
-            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#1976d2")}
+            onMouseOver={(e) =>
+              (e.currentTarget.style.backgroundColor = "#115293")
+            }
+            onMouseOut={(e) =>
+              (e.currentTarget.style.backgroundColor = "#1976d2")
+            }
           >
             {option.text}
           </button>
@@ -165,10 +202,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ onClose }) => {
           transition: "background-color 0.3s",
         }}
         onMouseOver={(e) => {
-          if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = "#ddd";
+          if (!e.currentTarget.disabled)
+            e.currentTarget.style.backgroundColor = "#ddd";
         }}
         onMouseOut={(e) => {
-          if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = "#eee";
+          if (!e.currentTarget.disabled)
+            e.currentTarget.style.backgroundColor = "#eee";
         }}
       >
         ← 戻る
