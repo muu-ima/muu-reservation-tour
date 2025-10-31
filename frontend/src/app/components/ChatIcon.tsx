@@ -4,6 +4,7 @@
 import React, { useState } from "react";
 import ChatWindow from "./ChatWindow";
 
+
 const MessageIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" width="24" height="24" {...props}>
     {/* 吹き出し本体を白で固定 */}

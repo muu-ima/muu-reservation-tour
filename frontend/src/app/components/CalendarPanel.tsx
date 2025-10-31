@@ -23,6 +23,7 @@ import {
 import { buildMonthCells } from "@/lib/calendarUtils";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useCalendarCursor } from "@/hooks/useCalendarCursor";
+import  ChatSpotlight  from "@/components/ChatSpotlight"
 // ============================================
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
 // ※ UIを「見学（tour）専用」に整理。体験（experience）関連UIは撤去。
@@ -223,6 +224,8 @@ export default function CalendarPanel() {
     return map;
   }, [allItems]);
 
+  const [showSpotlight, setShowSpotlight] = useState(false);
+
   // ===== UI
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-800 md:p-8 p-2 font-sans">
@@ -244,6 +247,14 @@ export default function CalendarPanel() {
               </h1>
             </div>
           </div>
+          <p
+            className="text-sm text-blue-600 cursor-pointer mt-2 hover:underline"
+            onMouseEnter={() => setShowSpotlight(true)}
+            onMouseLeave={() => setShowSpotlight(false)}
+            onClick={() => setShowSpotlight(true)}
+          >
+            💬 予約の取り方をチャットボットで確認する
+          </p>
 
           {/* 右側: アクションボタン群 */}
           <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap">
@@ -742,6 +753,11 @@ export default function CalendarPanel() {
         onSubmit={createReservation}
       />
       <ChatIcon />
+
+      <ChatSpotlight
+        show={showSpotlight}
+        onClose={() => setShowSpotlight(false)}
+      />
     </div>
   );
 }
