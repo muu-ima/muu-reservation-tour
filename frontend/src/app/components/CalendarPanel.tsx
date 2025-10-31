@@ -24,6 +24,7 @@ import { buildMonthCells } from "@/lib/calendarUtils";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useCalendarCursor } from "@/hooks/useCalendarCursor";
 import ChatSpotlight from "@/components/ChatSpotlight";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 // ============================================
 // Next.js (App Router) page.tsx — api.phpに合わせた同期版 + カレンダー表示 + モーダル新規作成
 // ※ UIを「見学（tour）専用」に整理。体験（experience）関連UIは撤去。
@@ -320,9 +321,9 @@ export default function CalendarPanel() {
         <section className="rounded-2xl md:rounded-3xl bg-white/95 shadow-lg ring-1 ring-neutral-200 md:p-8 space-y-2 transition hover:shadow-xl">
           {" "}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-4 flex-wrap mx-2 my-3">
               <button
-                className="px-3 py-1 rounded-xl border hover:bg-gray-50"
+                className="px-3 py-2 rounded-xl border border-gray-300 hover:bg-gray-100 active:scale-95 transition-all duration-200 flex items-center justify-center shadow-sm"
                 onClick={() =>
                   setCalCursor((d) =>
                     clampToRange(new Date(d.getFullYear(), d.getMonth() - 1, 1))
@@ -331,13 +332,18 @@ export default function CalendarPanel() {
                 aria-label="前の月"
                 disabled={!canGoPrev}
               >
-                ←
+                <ChevronLeft
+                  className="w-5 h-5 text-gray-700"
+                  strokeWidth={2.5}
+                />
               </button>
+
               <span className="min-w-[10ch] text-center text-xl md:text-2xl font-semibold text-gray-800 tracking-wide">
                 {formatMonthJP(calCursor)}
               </span>
+
               <button
-                className="px-3 py-1 rounded-xl border hover:bg-gray-50"
+                className="px-3 py-2 rounded-xl border border-gray-300 hover:bg-gray-100 active:scale-95 transition-all duration-200 flex items-center justify-center shadow-sm"
                 onClick={() =>
                   setCalCursor((d) =>
                     clampToRange(new Date(d.getFullYear(), d.getMonth() + 1, 1))
@@ -346,17 +352,10 @@ export default function CalendarPanel() {
                 aria-label="次の月"
                 disabled={!canGoNext}
               >
-                →
-              </button>
-              <button
-                className="px-3 py-1 rounded-xl border hover:bg-gray-50"
-                onClick={() => {
-                  const t = new Date();
-                  t.setDate(1);
-                  setCalCursor(t);
-                }}
-              >
-                今月
+                <ChevronRight
+                  className="w-5 h-5 text-gray-700"
+                  strokeWidth={2.5}
+                />
               </button>
             </div>
           </div>
@@ -574,156 +573,169 @@ export default function CalendarPanel() {
               });
 
               return (
-                <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden bg-white">
-                  {windowCells.map((cell) => {
-                    const dayItems = dayMap[cell.dateStr] ?? [];
-                    const slotState = summarizeSlots(dayItems);
-                    const isToday = cell.dateStr === toDateStr(new Date());
-                    const isWeekendCell = isWeekendStr(cell.dateStr);
+                <AnimatePresence mode="wait">
+                  <motion.ul
+                    key={`${monthKey}-${mobileHalf}`} // ← 月 or 前半/後半が変わるたびにアニメ
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.32, ease: [0.25, 0.1, 0.25, 1] }}
+                    className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden bg-white"
+                  >
+                    {" "}
+                    {windowCells.map((cell) => {
+                      const dayItems = dayMap[cell.dateStr] ?? [];
+                      const slotState = summarizeSlots(dayItems);
+                      const isToday = cell.dateStr === toDateStr(new Date());
+                      const isWeekendCell = isWeekendStr(cell.dateStr);
 
-                    // 月ルールチェック
-                    const today = new Date();
-                    const nextMonthStart = addMonths(startOfMonth(today), 1); // このセルが 「本日から見た来月」か？ (dateStrから判定)
+                      // 月ルールチェック
+                      const today = new Date();
+                      const nextMonthStart = addMonths(startOfMonth(today), 1); // このセルが 「本日から見た来月」か？ (dateStrから判定)
 
-                    const d = new Date(cell.dateStr);
-                    const isCellNextMonth =
-                      d.getFullYear() === nextMonthStart.getFullYear() &&
-                      d.getMonth() === nextMonthStart.getMonth();
-                    // 25日ルール（25日までは翌月を停止）
-                    const isLockedBy25Rule =
-                      isCellNextMonth && today.getDate() < 26;
+                      const d = new Date(cell.dateStr);
+                      const isCellNextMonth =
+                        d.getFullYear() === nextMonthStart.getFullYear() &&
+                        d.getMonth() === nextMonthStart.getMonth();
+                      // 25日ルール（25日までは翌月を停止）
+                      const isLockedBy25Rule =
+                        isCellNextMonth && today.getDate() < 26;
 
-                    // 受付可否: 平日で isBookable かつ「どちらもopen」のときだけ true
-                    const accepting =
-                      !isWeekendCell &&
-                      isBookable(cell.dateStr) &&
-                      !isDayClosedBySlots(slotState) &&
-                      !isLockedBy25Rule;
-                    const w = ["日", "月", "火", "水", "木", "金", "土"][
-                      cell.dow
-                    ];
+                      // 受付可否: 平日で isBookable かつ「どちらもopen」のときだけ true
+                      const accepting =
+                        !isWeekendCell &&
+                        isBookable(cell.dateStr) &&
+                        !isDayClosedBySlots(slotState) &&
+                        !isLockedBy25Rule;
+                      const w = ["日", "月", "火", "水", "木", "金", "土"][
+                        cell.dow
+                      ];
 
-                    return (
-                      <li key={cell.dateStr}>
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          aria-disabled={!accepting}
-                          title={
-                            accepting
-                              ? `${cell.dateStr} に予約を追加`
-                              : `${cell.dateStr} の予約を一覧で表示`
-                          }
-                          onClick={() => {
-                            if (isLockedBy25Rule) {
-                              alert("翌月の予約は26日以降に解放されます。");
+                      return (
+                        <li key={cell.dateStr}>
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            aria-disabled={!accepting}
+                            title={
+                              accepting
+                                ? `${cell.dateStr} に予約を追加`
+                                : `${cell.dateStr} の予約を一覧で表示`
                             }
-                            if (accepting) {
-                              openCreate(cell.dateStr);
-                            } else if (!isWeekendCell) {
-                              setFilter((f) => ({ ...f, date: cell.dateStr }));
-                              alert(
-                                isDayClosedBySlots(slotState)
-                                  ? closeReason(slotState)
-                                  : "本日以前・停止日は予約できません。"
-                              );
-                            }
-                          }}
-                          className={
-                            "relative flex items-center gap-3 px-3 py-3 transition " +
-                            (accepting
-                              ? "hover:bg-neutral-50 active:bg-neutral-100 cursor-pointer"
-                              : "bg-neutral-50 text-neutral-400 cursor-not-allowed")
-                          }
-                        >
-                          {/* 日付バッジ */}
-                          <div className="w-14 shrink-0 text-center">
-                            <div
-                              className={
-                                "text-base leading-5 " +
-                                (isToday
-                                  ? "font-semibold text-blue-600"
-                                  : "text-gray-900")
+                            onClick={() => {
+                              if (isLockedBy25Rule) {
+                                alert("翌月の予約は26日以降に解放されます。");
                               }
-                            >
-                              {cell.day}
-                            </div>
-                            <div
-                              className={
-                                "text-[10px] " +
-                                (isWeekendCell
-                                  ? "text-red-500"
-                                  : "text-gray-500")
-                              }
-                            >
-                              {w}
-                            </div>
-                          </div>
-
-                          {/* ステータス（午前/午後の空き） */}
-                          {/* ステータス（午前/午後の状態を強調表示） */}
-                          <div className="flex-1 min-w-0 mt-1">
-                            {(() => {
-                              const label = slotStateLabel(slotState);
-                              if (!label) return null; // 両openのときは非表示
-
-                              const style =
-                                label === "満席"
-                                  ? "text-[16px] font-semibold text-red-600"
-                                  : label.includes("保留")
-                                  ? "text-[16px] font-semibold text-amber-600"
-                                  : "text-[12px] text-neutral-600";
-
-                              return (
-                                <div
-                                  className={`${style} truncate`}
-                                  aria-hidden
-                                >
-                                  {label}
-                                </div>
-                              );
-                            })()}
-                          </div>
-
-                          {/* 右端：＋ / 休 / 停 */}
-                          {isWeekendCell ? (
-                            <div
-                              className="absolute right-3 bottom-2 h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
-                              aria-hidden
-                            >
-                              休
-                            </div>
-                          ) : accepting ? (
-                            <button
-                              type="button"
-                              className="absolute right-3 bottom-2 h-8 w-8 shrink-0 rounded-full border text-base leading-8 text-center bg-white hover:bg-gray-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
+                              if (accepting) {
                                 openCreate(cell.dateStr);
-                              }}
-                              aria-label={`${cell.dateStr} に予約を追加`}
-                              title="この日に予約を追加"
-                            >
-                              ＋
-                            </button>
-                          ) : (
-                            <div
-                              className="absolute right-3 bottom-2 h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
-                              title={
-                                isLockedBy25Rule
-                                  ? "翌月の予約は25日まで停止中"
-                                  : closeReason(slotState)
+                              } else if (!isWeekendCell) {
+                                setFilter((f) => ({
+                                  ...f,
+                                  date: cell.dateStr,
+                                }));
+                                alert(
+                                  isDayClosedBySlots(slotState)
+                                    ? closeReason(slotState)
+                                    : "本日以前・停止日は予約できません。"
+                                );
                               }
-                              aria-hidden
-                            >
-                              停
+                            }}
+                            className={
+                              "relative flex items-center gap-3 px-3 py-3 transition " +
+                              (accepting
+                                ? "hover:bg-neutral-50 active:bg-neutral-100 cursor-pointer"
+                                : "bg-neutral-50 text-neutral-400 cursor-not-allowed")
+                            }
+                          >
+                            {/* 日付バッジ */}
+                            <div className="w-14 shrink-0 text-center">
+                              <div
+                                className={
+                                  "text-base leading-5 " +
+                                  (isToday
+                                    ? "font-semibold text-blue-600"
+                                    : "text-gray-900")
+                                }
+                              >
+                                {cell.day}
+                              </div>
+                              <div
+                                className={
+                                  "text-[10px] " +
+                                  (isWeekendCell
+                                    ? "text-red-500"
+                                    : "text-gray-500")
+                                }
+                              >
+                                {w}
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+
+                            {/* ステータス（午前/午後の空き） */}
+                            {/* ステータス（午前/午後の状態を強調表示） */}
+                            <div className="flex-1 min-w-0 mt-1">
+                              {(() => {
+                                const label = slotStateLabel(slotState);
+                                if (!label) return null; // 両openのときは非表示
+
+                                const style =
+                                  label === "満席"
+                                    ? "text-[16px] font-semibold text-red-600"
+                                    : label.includes("保留")
+                                    ? "text-[16px] font-semibold text-amber-600"
+                                    : "text-[12px] text-neutral-600";
+
+                                return (
+                                  <div
+                                    className={`${style} truncate`}
+                                    aria-hidden
+                                  >
+                                    {label}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+
+                            {/* 右端：＋ / 休 / 停 */}
+                            {isWeekendCell ? (
+                              <div
+                                className="absolute right-3 bottom-2 h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
+                                aria-hidden
+                              >
+                                休
+                              </div>
+                            ) : accepting ? (
+                              <button
+                                type="button"
+                                className="absolute right-3 bottom-2 h-8 w-8 shrink-0 rounded-full border text-base leading-8 text-center bg-white hover:bg-gray-50"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openCreate(cell.dateStr);
+                                }}
+                                aria-label={`${cell.dateStr} に予約を追加`}
+                                title="この日に予約を追加"
+                              >
+                                ＋
+                              </button>
+                            ) : (
+                              <div
+                                className="absolute right-3 bottom-2 h-8 w-8 shrink-0 rounded-full border text-xs leading-8 text-center text-gray-400 bg-gray-50"
+                                title={
+                                  isLockedBy25Rule
+                                    ? "翌月の予約は25日まで停止中"
+                                    : closeReason(slotState)
+                                }
+                                aria-hidden
+                              >
+                                停
+                              </div>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </motion.ul>
+                </AnimatePresence>
               );
             })()}
           </div>
