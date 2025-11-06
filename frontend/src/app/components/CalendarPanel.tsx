@@ -38,6 +38,39 @@ const API_BASE =
 type SlotState = "open" | "pending" | "booked";
 type DaySlotState = { am: SlotState; pm: SlotState };
 
+// === 最短予約用の型 ==================
+type NextOpen = { date: string; slot: Slot; program?: string };
+
+// === 最短予約を取得する関数（今回追加） =====
+async function fetchNextOpen(
+  program: string = "tour"
+): Promise<NextOpen | null> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/v2/availabilities/next?program=${encodeURIComponent(
+        program
+      )}`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      date?: string;
+      slot?: Slot;
+      program?: string;
+    };
+    if (data?.date && (data.slot === "am" || data.slot === "pm")) {
+      return {
+        date: data.date,
+        slot: data.slot,
+        program: data.program ?? program,
+      };
+    }
+  } catch {
+    /* noop */
+  }
+  return null;
+}
+
 // 予約配列から am/pm の状態を要約（canceledは既に除外済み）
 function summarizeSlots(items: Reservation[]): DaySlotState {
   const init: DaySlotState = { am: "open", pm: "open" };
@@ -185,18 +218,6 @@ export default function CalendarPanel() {
     }
   }, [sp, router, openCreate, clampToRange, setCalCursor]);
 
-  // 次に予約可能な日付（今日の翌日から最大60日先まで）を返す
-  function nextBookableDate(fromDateStr: string): string | null {
-    const base = new Date(fromDateStr + "T00:00:00");
-    for (let i = 1; i <= 60; i++) {
-      const d = new Date(base);
-      d.setDate(base.getDate() + i);
-      const s = toDateStr(d);
-      if (!isWeekendStr(s) && isBookable(s)) return s;
-    }
-    return null;
-  }
-
   function addMonths(d: Date, n: number) {
     return new Date(d.getFullYear(), d.getMonth() + n, 1);
   }
@@ -226,6 +247,66 @@ export default function CalendarPanel() {
   }, [allItems]);
 
   const [showSpotlight, setShowSpotlight] = useState(false);
+
+  // 直近の「予約可」日を探す（最長60日スキャン）
+  const computeNextBookableDate = useCallback(
+    (startStr: string) => {
+      const start = new Date(startStr);
+      const today = new Date();
+      for (let i = 0; i < 60; i++) {
+        const d = addDays(start, i);
+        const dateStr = toDateStr(d);
+
+        // weekend / day-closed / 25日ルール を既存と同じ条件で判定
+        const isWeekendCell = isWeekendStr(dateStr);
+
+        const isCellNextMonth =
+          d.getFullYear() === nextMonthStart.getFullYear() &&
+          d.getMonth() === nextMonthStart.getMonth();
+        const isLockedBy25Rule = isCellNextMonth && today.getDate() < 26;
+
+        const dayItems = dayMap[dateStr] ?? [];
+        const slotState = summarizeSlots(dayItems);
+        const closed = isDayClosedBySlots(slotState);
+
+        const accepting =
+          !isWeekendCell && isBookable(dateStr) && !closed && !isLockedBy25Rule;
+
+        if (accepting) return dateStr;
+      }
+      return null;
+    },
+    [dayMap, isBookable, nextMonthStart]
+  );
+
+  const handleQuickCreate = useCallback(async () => {
+    const program = (sp.get("program") ?? "tour") as string;
+
+    // ① APIから最短予約候補を取得
+    const next = await fetchNextOpen(program);
+    if (next) {
+      // カレンダーを該当月へ寄せて、モーダルをそのまま開く（am/pm も反映）
+      setCalCursor(() =>
+        clampToRange(
+          new Date(
+            new Date(`${next.date}T00:00:00`).getFullYear(),
+            new Date(`${next.date}T00:00:00`).getMonth(),
+            1
+          )
+        )
+      );
+      openCreate(next.date, next.slot);
+      return;
+    }
+    // ② 取れなかった場合は従来ロジックでフォールバック
+    const today = toDateStr(new Date());
+    const alt = computeNextBookableDate(today);
+    if (alt) {
+      openCreate(alt);
+    } else {
+      alert("直近60日以内に予約可能な日がありません。");
+    }
+  }, [sp, clampToRange, setCalCursor, openCreate, computeNextBookableDate]);
 
   // ===== UI
   return (
@@ -281,15 +362,7 @@ export default function CalendarPanel() {
 
             {/* 新規予約ボタン */}
             <button
-              onClick={() => {
-                const today = toDateStr(new Date());
-                const next = nextBookableDate(today);
-                if (next) {
-                  openCreate(next);
-                } else {
-                  alert("直近60日内に予約可能な日がありません。");
-                }
-              }}
+              onClick={handleQuickCreate}
               className={[
                 "rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 text-white",
                 "px-4 py-2 text-[14px] font-semibold shadow-md",

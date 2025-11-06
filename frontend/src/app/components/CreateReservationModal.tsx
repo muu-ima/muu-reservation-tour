@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import Modal from "@/components/Modal";
 import type { ReservationCreatePayload, Slot } from "@/types/reservation";
 import { getErrorMessage } from "@/types/reservation";
+import { validateReservationCreate } from "@/lib/validators/reservation";
 
 type Props = {
   open: boolean;
@@ -18,7 +19,7 @@ const emptyDraft: ReservationCreatePayload = {
   name: "",
   last_name: "",
   first_name: "",
-  kana:"",
+  kana: "",
   email: "",
   phone: "",
   notebook_type: "",
@@ -52,53 +53,69 @@ export default function CreateReservationModal({
     }
   }, [open, initialDate, initialSlot]);
 
-const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
-  const form = e.currentTarget;
-  if (!form.reportValidity()) return;
+  // ※ CreateReservationModal.tsx の handleSubmit を差し替え
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    if (!form.reportValidity()) return;
 
-  // ★ 二重送信ブロック：実行中なら即 return
-  if (submitGuardRef.current || loading) return;
-  submitGuardRef.current = true;
+    // 先に「実行中ならreturn」は据え置き
+    if (submitGuardRef.current || loading) return;
 
-  const nilIfEmpty = (v?: string | null) => {
-    const s = (v ?? "").trim();
-    return s === "" ? null : s;
+    // 補助関数
+    const nilIfEmpty = (v?: string | null) => {
+      const s = (v ?? "").trim();
+      return s === "" ? null : s;
+    };
+    const toAsciiPhone = (s?: string | null) => {
+      const t = (s ?? "").trim();
+      if (!t) return null;
+      return t
+        .replace(/[０-９]/g, (d) =>
+          String.fromCharCode(d.charCodeAt(0) - 0xfee0)
+        )
+        .trim();
+    };
+
+    // ① payload を組み立て
+    const payload: ReservationCreatePayload = {
+      date: draft.date,
+      program: "tour",
+      slot: draft.slot,
+      name: nilIfEmpty(draft.name),
+      last_name: nilIfEmpty(draft.last_name),
+      first_name: nilIfEmpty(draft.first_name),
+      kana: nilIfEmpty(draft.kana),
+      email: nilIfEmpty(draft.email),
+      phone: toAsciiPhone(draft.phone),
+      notebook_type: nilIfEmpty(draft.notebook_type),
+      has_certificate: !!draft.has_certificate,
+      note: nilIfEmpty(draft.note),
+    };
+
+    // ② 業務ルールバリデーション（ここで止めると二重送信ガードを消し忘れしない）
+    const issues = validateReservationCreate(payload /*, { isBookable: ... }*/);
+    if (issues.length) {
+      setError(issues.map((i) => `・${i.message}`).join("\n"));
+      return; // ← ガード未ONなので安全に抜けられる
+    }
+
+    // ③ 送信開始（ここでガードON）
+    submitGuardRef.current = true;
+    setLoading(true);
+    setError(null);
+
+    try {
+      await onSubmit(payload);
+      setSuccess("予約を送信しました。");
+      setTimeout(() => onClose(), 1200);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+      submitGuardRef.current = false; // 忘れず解除
+    }
   };
-  const toAsciiPhone = (s?: string | null) => {
-    const t = (s ?? "").trim();
-    if (!t) return null;
-    return t.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)).trim();
-  };
-
-  const payload: ReservationCreatePayload = {
-    date: draft.date,
-    program: "tour",
-    slot: draft.slot,
-    name: nilIfEmpty(draft.name),
-    last_name: nilIfEmpty(draft.last_name),
-    first_name: nilIfEmpty(draft.first_name),
-    kana: nilIfEmpty(draft.kana),
-    email: nilIfEmpty(draft.email),
-    phone: toAsciiPhone(draft.phone),
-    notebook_type: nilIfEmpty(draft.notebook_type),
-    has_certificate: !!draft.has_certificate,
-    note: nilIfEmpty(draft.note),
-  };
-
-  setLoading(true);
-  setError(null);
-  try {
-    await onSubmit(payload);
-    setSuccess("予約を送信しました。");
-    setTimeout(() => onClose(), 1200);
-  } catch (err) {
-    setError(getErrorMessage(err));
-  } finally {
-    setLoading(false);
-    submitGuardRef.current = false; // ★ 忘れずに解除
-  }
-};
 
   return (
     <Modal open={open} onClose={onClose} title="見学予約の追加">
