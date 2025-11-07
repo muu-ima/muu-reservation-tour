@@ -1,11 +1,11 @@
 import { toDateStr } from "@/lib/date";
 
 export type MonthCell = {
-  dateStr: string;   // "YYYY-MM-DD"
-  inMonth: boolean;  // 表示中の月か？
+  dateStr: string; // "YYYY-MM-DD"
+  inMonth: boolean; // 表示中の月か？
   y: number;
-  m: number;         // 0-11
-  day: number;       // 1-31
+  m: number; // 0-11
+  day: number; // 1-31
 };
 
 // mode の意味
@@ -14,7 +14,7 @@ export type MonthCell = {
 //  - true     : 当月 + 常に6週(=42マス)にそろえる旧スタイル
 export function buildMonthCells(
   cursor: Date,
-  mode: boolean | "tail" = "tail",
+  mode: boolean | "tail" = "tail"
 ): MonthCell[] {
   const y = cursor.getFullYear();
   const m = cursor.getMonth(); // 0-11
@@ -101,7 +101,7 @@ function normalizeByMode(
 // -> 0=Mon,...,6=Sun にしたい
 function weekdayIndexMonStart(d: Date) {
   const w = d.getDay(); // 0..6 (Sun..Sat)
-  return (w + 6) % 7;   // Sun(0)->6, Mon(1)->0, ... Sat(6)->5
+  return (w + 6) % 7; // Sun(0)->6, Mon(1)->0, ... Sat(6)->5
 }
 
 // 1セルぶんのオブジェクトを作る
@@ -114,3 +114,43 @@ function makeCell(d: Date, inMonth: boolean): MonthCell {
     day: d.getDate(),
   };
 }
+
+// JSTの今日
+export const inJst = (d: Date = new Date()) => {
+  const utc = d.getTime() + d.getTimezoneOffset() * 60000;
+  return new Date(utc + 9 * 60 * 60000);
+};
+
+export const ymOf = (d: Date) => ({ y: d.getFullYear(), m: d.getMonth() + 1 });
+
+export const addMonthsYM = (y: number, m: number, delta: number) => {
+  const dt = new Date(Date.UTC(y, m - 1, 1));
+  dt.setUTCMonth(dt.getUTCMonth() + delta);
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1 };
+};
+
+// ★ 26日ルール対応：許可する「移動先の月」集合（単月表示を前提にナビだけ制御）
+export const allowedMonthsForNav = (todayJst: Date = inJst()) => {
+  const { y, m } = ymOf(todayJst);
+  const day = todayJst.getDate();
+
+  // 1日だけは「前月⇄当月」を許可（締め作業のため）
+  if (day === 1) {
+    return [addMonthsYM(y, m, -1), { y, m }];
+  }
+
+  // 26〜月末は「当月⇄翌月」
+  if (day >= 26) {
+    return [{ y, m }, addMonthsYM(y, m, 1)];
+  }
+
+  // 2〜25日は当月のみ
+  return [{ y, m }];
+};
+
+// ユーティリティ
+export const sameYM = (a: { y: number; m: number }, b: { y: number; m: number }) =>
+  a.y === b.y && a.m === b.m;
+
+export const cmpYM = (a: { y: number; m: number }, b: { y: number; m: number }) =>
+  a.y !== b.y ? a.y - b.y : a.m - b.m;

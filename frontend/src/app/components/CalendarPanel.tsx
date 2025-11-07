@@ -20,7 +20,13 @@ import {
   addDays,
   daysInMonth,
 } from "@/lib/date";
-import { buildMonthCells } from "@/lib/calendarUtils";
+import {
+  buildMonthCells,
+  inJst,
+  allowedMonthsForNav,
+  sameYM,
+  cmpYM,
+} from "@/lib/calendarUtils";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useCalendarCursor } from "@/hooks/useCalendarCursor";
 import ChatSpotlight from "@/components/ChatSpotlight";
@@ -149,9 +155,7 @@ export default function CalendarPanel() {
     clampToRange,
     calCursor,
     setCalCursor,
-    canGoPrev,
-    canGoNext,
-
+  
     mobileHalf,
     setMobileHalf,
     mobileAnchor,
@@ -159,6 +163,31 @@ export default function CalendarPanel() {
     onTouchEnd,
     nextMonthStart,
   } = useCalendarCursor({ monthsAhead: 1 }); // 今月/翌月まで許可
+
+  // ▼▼▼ ここから追記（26日ルールのナビ制御）▼▼▼
+  const todayJst = useMemo(() => inJst(), []);
+  const allowedNav = useMemo(() => allowedMonthsForNav(todayJst), [todayJst]);
+  const minYM = allowedNav[0];
+  const maxYM = allowedNav[allowedNav.length - 1];
+
+  const ymOf = (d: Date) => ({ y: d.getFullYear(), m: d.getMonth() + 1 });
+  const toDateYM = ({ y, m }: { y: number; m: number }) =>
+    new Date(y, m - 1, 1);
+
+  // 26日ルールに合わせて、移動先の月を許可範囲にクランプ
+  const clampToRange26 = useCallback(
+    (d: Date) => {
+      const target = ymOf(d);
+      if (cmpYM(target, minYM) < 0) return toDateYM(minYM);
+      if (cmpYM(target, maxYM) > 0) return toDateYM(maxYM);
+      return new Date(d.getFullYear(), d.getMonth(), 1);
+    },
+    [minYM, maxYM]
+  );
+
+  const curYM = ymOf(calCursor);
+  const canGoPrev26 = allowedNav.length > 1 && !sameYM(curYM, minYM);
+  const canGoNext26 = allowedNav.length > 1 && !sameYM(curYM, maxYM);
 
   // 表示窓：前半 1〜14日（14日分）、後半 15日〜月末（残り全部）
   const MOBILE_WINDOW_DAYS = 14;
@@ -308,6 +337,7 @@ export default function CalendarPanel() {
     }
   }, [sp, clampToRange, setCalCursor, openCreate, computeNextBookableDate]);
 
+  const showArrows = todayJst.getDate() >= 26; // useMemoは不要
   // ===== UI
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-800 md:p-8 p-2 font-sans">
@@ -396,40 +426,44 @@ export default function CalendarPanel() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-wrap mx-2 my-3">
               <button
-                className="px-3 py-2 rounded-xl border border-gray-300 hover:bg-gray-100 active:scale-95 transition-all duration-200 flex items-center justify-center shadow-sm"
-                onClick={() =>
-                  setCalCursor((d) =>
-                    clampToRange(new Date(d.getFullYear(), d.getMonth() - 1, 1))
-                  )
-                }
-                aria-label="前の月"
-                disabled={!canGoPrev}
-              >
-                <ChevronLeft
-                  className="w-5 h-5 text-gray-700"
-                  strokeWidth={2.5}
-                />
-              </button>
+  className={
+    "px-3 py-2 rounded-xl border border-gray-300 transition-all duration-200 flex items-center justify-center shadow-sm " +
+    (showArrows && canGoPrev26
+      ? "hover:bg-gray-100 active:scale-95"
+      : "invisible pointer-events-none")
+  }
+  onClick={() =>
+    setCalCursor((d) =>
+      clampToRange26(new Date(d.getFullYear(), d.getMonth() - 1, 1))
+    )
+  }
+  aria-label="前の月"
+>
+  <ChevronLeft className="w-5 h-5 text-gray-700" strokeWidth={2.5} />
+</button>
+
 
               <span className="min-w-[10ch] text-center text-xl md:text-2xl font-semibold text-gray-800 tracking-wide">
                 {formatMonthJP(calCursor)}
               </span>
 
-              <button
-                className="px-3 py-2 rounded-xl border border-gray-300 hover:bg-gray-100 active:scale-95 transition-all duration-200 flex items-center justify-center shadow-sm"
-                onClick={() =>
-                  setCalCursor((d) =>
-                    clampToRange(new Date(d.getFullYear(), d.getMonth() + 1, 1))
-                  )
-                }
-                aria-label="次の月"
-                disabled={!canGoNext}
-              >
-                <ChevronRight
-                  className="w-5 h-5 text-gray-700"
-                  strokeWidth={2.5}
-                />
-              </button>
+       <button
+  className={
+    "px-3 py-2 rounded-xl border border-gray-300 transition-all duration-200 flex items-center justify-center shadow-sm " +
+    (showArrows && canGoNext26
+      ? "hover:bg-gray-100 active:scale-95"
+      : "invisible pointer-events-none")
+  }
+  onClick={() =>
+    setCalCursor((d) =>
+      clampToRange26(new Date(d.getFullYear(), d.getMonth() + 1, 1))
+    )
+  }
+  aria-label="次の月"
+>
+  <ChevronRight className="w-5 h-5 text-gray-700" strokeWidth={2.5} />
+</button>
+
             </div>
           </div>
           {/* 曜日ヘッダー — PC/タブレットのみ */}

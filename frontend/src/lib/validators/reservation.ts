@@ -5,7 +5,6 @@ import {
   Status,
   isProgram,
   isSlot,
-  isStatus,
   isSlotAllowed,
   getSlotWindowJst,
 } from "@/types/reservation";
@@ -24,7 +23,6 @@ export function isDateStr(v: string): boolean {
 export function isTodayOrFuture(v: string, now = new Date()): boolean {
   const d = new Date(`${v}T00:00:00+09:00`); // JST
   const today = new Date(now);
-  const tz = today.getTimezoneOffset();
   // 当日0:00と比較（ローカル前提。運用JSTなら +09:00 で揃える）
   today.setHours(0, 0, 0, 0);
   d.setHours(0, 0, 0, 0);
