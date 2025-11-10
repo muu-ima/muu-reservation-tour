@@ -44,20 +44,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             --ok:#1f8b4c; --warn:#b45309; --danger:#b91c1c;
 
             /* ▼ 背景画像（/public/bg-soft-warm.png に配置） */
-            --bg-img: url('/bg-soft-warm.png');
-            --bg-img-opacity: 0.32;   /* 見え方が足りなければ 0.40〜0.55 へ */
-            --bg-img-blur: 3px;
-            --bg-img-sat: 108%;
-            --bg-img-scale: 1.03;
+            --bg-img: url('/bg_page_1.png');
+            --bg-img-opacity: 0.44;   /* 0.38–0.50 あたりで調整 */
+            --bg-img-blur: 1.5px;     /* 1–2px で“ふんわり” */
+            --bg-img-sat: 112%;       /* 少しだけ華やかに */
+            --bg-img-scale: 1.04;     /* 周縁の切れ対策に1–4%拡大 */
           }
 
           @media (prefers-color-scheme: dark) {
             .mono {
               --bg:#0b0d10; --panel:#121418; --border:#262a30;
               --text:#e5e7eb; --muted:#9aa0a6;
-              --bg-img-opacity: 0.10;
-              --bg-img-blur: 6px;
-              --bg-img-sat: 85%;
+              --bg-img-opacity: 0.55;
+              --bg-img-blur: 2px;
+              --bg-img-sat: 115%;
             }
           }
 
