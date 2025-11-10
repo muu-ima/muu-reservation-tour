@@ -1,10 +1,23 @@
 // app/layout.tsx
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Noto_Sans_JP, Zen_Maru_Gothic } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+
+// ★ “japanese” サブセットは存在しない。latin のみでOK
+const noto = Noto_Sans_JP({
+  variable: "--font-noto",
+  weight: ["400", "500", "700"],
+  subsets: ["latin"],
+});
+
+const zen = Zen_Maru_Gothic({
+  variable: "--font-zen",
+  weight: ["300", "400", "500", "700"],
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "予約管理システム",
@@ -14,69 +27,90 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja" className="mono" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${noto.variable} ${zen.variable} antialiased`}>
         {children}
 
-        {/* Server Component-safe global style */}
         <style id="mono-theme">{`
           /* ===== Palette (Light) ===== */
           .mono {
-            --bg: #f8f9fa;
+            --bg: #faf7f5;
             --panel: #ffffff;
-            --border: #e5e7eb;
-            --text: #111827;
-            --muted: #6b7280;
-            --accent: #2563eb; /* 1色だけ使う場合はここを差し替え */
+            --border: #e7dcd5;
+            --text: #3a3a3a;
+            --muted: #9a8f89;
+            --accent: #6fa6c9;
+            --accent-warm: #e8a27f;
+            --bg-warm: #f6ede7;
             --ok:#1f8b4c; --warn:#b45309; --danger:#b91c1c;
+
+            /* ▼ 背景画像（/public/bg-soft-warm.png に配置） */
+            --bg-img: url('/bg-soft-warm.png');
+            --bg-img-opacity: 0.32;   /* 見え方が足りなければ 0.40〜0.55 へ */
+            --bg-img-blur: 3px;
+            --bg-img-sat: 108%;
+            --bg-img-scale: 1.03;
           }
-          /* ===== Palette (Dark: OS設定に追従) ===== */
+
           @media (prefers-color-scheme: dark) {
             .mono {
               --bg:#0b0d10; --panel:#121418; --border:#262a30;
               --text:#e5e7eb; --muted:#9aa0a6;
+              --bg-img-opacity: 0.10;
+              --bg-img-blur: 6px;
+              --bg-img-sat: 85%;
             }
           }
 
           /* ===== Base ===== */
-          .mono body { background: var(--bg); color: var(--text); color-scheme: light dark; }
+          .mono body {
+            position: relative;
+            background: transparent; /* 背景は透明にして画像を見せる */
+            color: var(--text);
+          }
 
-          /* ===== 対象UIがTailwindの灰色/青を使っていても上書きで単色化 ===== */
-          .mono [class*="bg-white"] { background-color: var(--panel) !important; }
-          .mono [class*="bg-gray-50"] { background-color: color-mix(in oklab, var(--panel), black 2%) !important; }
+          /* ===== 全画面の背景画像 ===== */
+          .mono body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1; /* 背景は一番下 */
+            background-image: var(--bg-img);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: var(--bg-img-opacity);
+            filter: blur(var(--bg-img-blur)) saturate(var(--bg-img-sat));
+            transform: scale(var(--bg-img-scale));
+            pointer-events: none;
+          }
 
-          .mono [class*="text-gray-900"] { color: var(--text) !important; }
-          .mono [class*="text-gray-7"], .mono [class*="text-gray-6"], .mono [class*="text-gray-5"] { color: var(--muted) !important; }
+          /* 端を淡くするマスク（可読性UP） */
+          html.mono::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background:
+              radial-gradient(120% 60% at 50% 0%, transparent 60%, color-mix(in oklab, var(--bg), transparent 85%)),
+              linear-gradient(to bottom, color-mix(in oklab, var(--bg), transparent 85%), transparent 30%, transparent 70%, color-mix(in oklab, var(--bg), transparent 85%));
+            pointer-events: none;
+          }
 
-          .mono [class*="border-gray"], .mono [class~="border"] { border-color: var(--border) !important; }
-
-          .mono [class*="ring-blue-500"] { --tw-ring-color: var(--accent) !important; }
-          .mono [class*="text-blue-6"] { color: var(--accent) !important; }
-          .mono [class*="bg-blue-6"] { background-color: var(--accent) !important; }
-
-          /* ===== 変化が分かりやすくなる “最低限の見た目補強” ===== */
-          /* main直下の子（一覧やカレンダーの大枠）をカード化 */
+          /* ===== 面（カード）だけ白で浮かせる ===== */
           .mono main > * {
             background: var(--panel);
             border: 1px solid var(--border);
             border-radius: 1rem;
-            box-shadow: 0 1px 8px color-mix(in oklab, #000, transparent 92%);
+            box-shadow: 0 1px 8px color-mix(in oklab, #7f5b4b, transparent 92%);
           }
 
-          /* 余白（画面端にべったりだと差が見えにくい） */
           .mono main { padding: 16px; }
           @media (min-width: 768px) { .mono main { padding: 24px; } }
           @media (min-width: 1024px) { .mono main { padding: 32px; } }
 
-          /* フォーカス＆ホバー（単色でも操作感を出す） */
-          .mono button, .mono a, .mono [role="button"] { outline-offset: 2px; }
-          .mono button:focus-visible, .mono a:focus-visible, .mono [role="button"]:focus-visible {
-            outline: 2px solid color-mix(in oklab, var(--accent), transparent 40%);
-          }
-
-          /* バッジ用（必要になったら className に badge-ok 等を足すだけ） */
-          .mono .badge-ok     { background:color-mix(in oklab, var(--ok), transparent 90%); color:var(--ok);     border:1px solid color-mix(in oklab, var(--ok), transparent 80%); border-radius:.375rem; padding:.125rem .375rem; font-size:.75rem; }
-          .mono .badge-warn   { background:color-mix(in oklab, var(--warn), transparent 90%); color:var(--warn);  border:1px solid color-mix(in oklab, var(--warn), transparent 80%); border-radius:.375rem; padding:.125rem .375rem; font-size:.75rem; }
-          .mono .badge-danger { background:color-mix(in oklab, var(--danger), transparent 90%); color:var(--danger); border:1px solid color-mix(in oklab, var(--danger), transparent 80%); border-radius:.375rem; padding:.125rem .375rem; font-size:.75rem; }
+          /* ===== 背景を潰すユーティリティの上書き（安全策） ===== */
+          .mono [class*="bg-neutral-100"] { background-color: transparent !important; }
+          .mono [class*="bg-gray-50"]      { background-color: color-mix(in oklab, var(--bg-warm), white 70%) !important; }
         `}</style>
       </body>
     </html>

@@ -57,11 +57,22 @@ export default async function Page() {
     <div className="min-h-[calc(100dvh)] bg-neutral-100">
       <div className="mx-auto max-w-5xl px-4 py-10">
         <div className="mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-            予約をはじめる
+          <h1 className="text-[1.9rem] md:text-[2.4rem] font-medium tracking-[-0.015em] leading-[1.25] text-neutral-800">
+            見学のご予約について
           </h1>
-          <p className="mt-2 text-sm text-neutral-600">
-            最短で予約するか、カレンダーから選ぶかをお選びください。
+
+          <p className="mt-4 text-[0.95rem] text-neutral-700 leading-relaxed tracking-[0.01em]">
+            見学のご予約は、2つの方法からお選びいただけます。
+            <br />
+            <span className="inline-block mt-2">
+              「最短の開け日で予約」では、いちばん早くご案内できる日を
+              自動でお知らせします。
+            </span>
+            <br />
+            <span className="inline-block mt-1">
+              「カレンダーから選ぶ」では、ご希望の日にちを見ながら、
+              ゆっくりお選びいただけます。
+            </span>
           </p>
         </div>
 
@@ -71,16 +82,6 @@ export default async function Page() {
           nextOpenLabel={nextOpenLabel} // 左の補足表示（例: 10月31日(金)）
           calendarHref={calendarHref} // 右：カレンダーへ
         />
-
-        <div className="mt-8 text-xs text-neutral-500">
-          <ul className="list-disc pl-5 space-y-1">
-            <li>当月25日までは翌月の予約は非公開（フロントでもロック）。</li>
-            <li>
-              最短予約は <code>program</code> をクエリで渡せます（例:{" "}
-              <code>?program=tour</code>）。
-            </li>
-          </ul>
-        </div>
       </div>
     </div>
   );
