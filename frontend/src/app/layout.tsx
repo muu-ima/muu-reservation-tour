@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_JP, Zen_Maru_Gothic } from "next/font/google";
 import "./globals.css";
+import RouteLoader from "@/components/RouteLoader";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -28,6 +29,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja" className="mono" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} ${noto.variable} ${zen.variable} antialiased`}>
+           {/* ▼ 全ページ共通ローダー（ページ遷移で表示） */}
+        <RouteLoader />
         {children}
 
         <style id="mono-theme">{`
