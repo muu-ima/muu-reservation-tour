@@ -3,11 +3,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_JP, Zen_Maru_Gothic } from "next/font/google";
 import "./globals.css";
 import RouteLoader from "@/components/RouteLoader";
+import Script from "next/script"; // ★ これ追加
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
-// ★ “japanese” サブセットは存在しない。latin のみでOK
 const noto = Noto_Sans_JP({
   variable: "--font-noto",
   weight: ["400", "500", "700"],
@@ -29,7 +29,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja" className="mono" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} ${noto.variable} ${zen.variable} antialiased`}>
-           {/* ▼ 全ページ共通ローダー（ページ遷移で表示） */}
+        <Script
+          src={`https://www.google.com/recaptcha/api.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}`}
+          strategy="afterInteractive"
+        />
+
+        {/* ▼ 全ページ共通ローダー（ページ遷移で表示） */}
         <RouteLoader />
         {children}
 
@@ -46,12 +51,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             --bg-warm: #f6ede7;
             --ok:#1f8b4c; --warn:#b45309; --danger:#b91c1c;
 
-            /* ▼ 背景画像（/public/bg-soft-warm.png に配置） */
             --bg-img: url('/bg_page_1.png');
-            --bg-img-opacity: 0.44;   /* 0.38–0.50 あたりで調整 */
-            --bg-img-blur: 1.5px;     /* 1–2px で“ふんわり” */
-            --bg-img-sat: 112%;       /* 少しだけ華やかに */
-            --bg-img-scale: 1.04;     /* 周縁の切れ対策に1–4%拡大 */
+            --bg-img-opacity: 0.44;
+            --bg-img-blur: 1.5px;
+            --bg-img-sat: 112%;
+            --bg-img-scale: 1.04;
           }
 
           @media (prefers-color-scheme: dark) {
@@ -64,19 +68,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }
           }
 
-          /* ===== Base ===== */
           .mono body {
             position: relative;
-            background: transparent; /* 背景は透明にして画像を見せる */
+            background: transparent;
             color: var(--text);
           }
 
-          /* ===== 全画面の背景画像 ===== */
           .mono body::before {
             content: "";
             position: fixed;
             inset: 0;
-            z-index: -1; /* 背景は一番下 */
+            z-index: -1;
             background-image: var(--bg-img);
             background-size: cover;
             background-position: center;
@@ -87,7 +89,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             pointer-events: none;
           }
 
-          /* 端を淡くするマスク（可読性UP） */
           html.mono::after {
             content: "";
             position: fixed;
@@ -99,7 +100,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             pointer-events: none;
           }
 
-          /* ===== 面（カード）だけ白で浮かせる ===== */
           .mono main > * {
             background: var(--panel);
             border: 1px solid var(--border);
@@ -111,7 +111,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           @media (min-width: 768px) { .mono main { padding: 24px; } }
           @media (min-width: 1024px) { .mono main { padding: 32px; } }
 
-          /* ===== 背景を潰すユーティリティの上書き（安全策） ===== */
           .mono [class*="bg-neutral-100"] { background-color: transparent !important; }
           .mono [class*="bg-gray-50"]      { background-color: color-mix(in oklab, var(--bg-warm), white 70%) !important; }
         `}</style>

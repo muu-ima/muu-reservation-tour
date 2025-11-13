@@ -8,6 +8,7 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -51,8 +52,68 @@ class ReservationController extends Controller
     public function store(Request $request)
     {
         Log::info('🟢 store() started', ['input' => $request->all()]);
+
         try {
             Log::info('✅ store() entered', $request->all());
+
+            // ▼ reCAPTCHA v3 検証をここで実施
+            $token  = $request->input('recaptchaToken');
+            $secret = env('RECAPTCHA_SECRET_KEY');
+
+            if (!$token || !$secret) {
+                Log::warning('reCAPTCHA token or secret missing', [
+                    'token'  => $token,
+                    'secret_exists' => (bool) $secret,
+                ]);
+
+                return response()->json(
+                    ['message' => 'reCAPTCHA 検証に失敗しました。時間をおいて再度お試しください。'],
+                    400,
+                    $this->cors($request),
+                    $this->jsonFlags
+                );
+            }
+
+            try {
+                $res = Http::asForm()->post(
+                    'https://www.google.com/recaptcha/api/siteverify',
+                    [
+                        'secret'   => $secret,
+                        'response' => $token,
+                    ]
+                );
+
+                $body  = $res->json();
+                $score = $body['score'] ?? null;
+
+                // success=false または スコアが低すぎる場合は拒否
+                if (!($body['success'] ?? false) || $score < 0.5) {
+                    Log::warning('reCAPTCHA failed', [
+                        'result' => $body,
+                    ]);
+
+                    return response()->json(
+                        [
+                            'message' => 'reCAPTCHA 判定に失敗しました。',
+                            'score'   => $score,
+                        ],
+                        400,
+                        $this->cors($request),
+                        $this->jsonFlags
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::error('reCAPTCHA http error', [
+                    'error' => $e->getMessage(),
+                ]);
+
+                return response()->json(
+                    ['message' => 'reCAPTCHA サーバーとの通信に失敗しました。'],
+                    500,
+                    $this->cors($request),
+                    $this->jsonFlags
+                );
+            }
 
             // 軽い正規化
             if ($request->filled('phone')) {

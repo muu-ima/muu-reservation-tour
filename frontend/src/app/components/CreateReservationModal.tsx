@@ -12,6 +12,11 @@ type Props = {
   onSubmit: (payload: ReservationCreatePayload) => Promise<void>;
 };
 
+type Grecaptcha = {
+  execute: (siteKey: string, opts: { action: string }) => Promise<string>;
+  ready?: (cb: () => void) => void;
+};
+
 const emptyDraft: ReservationCreatePayload = {
   date: "",
   program: "tour", // ← 見学専用
@@ -78,7 +83,8 @@ export default function CreateReservationModal({
     };
 
     // ① payload を組み立て
-    const payload: ReservationCreatePayload = {
+    // ① basePayload を組み立て（最初の payload を basePayload に変更）
+    const basePayload: ReservationCreatePayload = {
       date: draft.date,
       program: "tour",
       slot: draft.slot,
@@ -93,12 +99,66 @@ export default function CreateReservationModal({
       note: nilIfEmpty(draft.note),
     };
 
-    // ② 業務ルールバリデーション（ここで止めると二重送信ガードを消し忘れしない）
-    const issues = validateReservationCreate(payload /*, { isBookable: ... }*/);
+    // ② 業務ルールバリデーション
+    const issues = validateReservationCreate(basePayload);
     if (issues.length) {
       setError(issues.map((i) => `・${i.message}`).join("\n"));
-      return; // ← ガード未ONなので安全に抜けられる
+      return;
     }
+
+    // ③ reCAPTCHA v3 トークン取得
+    let recaptchaToken: string | null = null;
+    try {
+      if (typeof window === "undefined" || !("grecaptcha" in window)) {
+        setError(
+          "reCAPTCHA の読み込みに失敗しました。時間をおいて再度お試しください。"
+        );
+        return;
+      }
+
+      // window.grecaptcha を安全に取り出す
+      const grecaptcha = (window as unknown as { grecaptcha?: Grecaptcha })
+        .grecaptcha;
+
+      if (!grecaptcha) {
+        setError(
+          "reCAPTCHA の読み込みに失敗しました。時間をおいて再度お試しください。"
+        );
+        return;
+      }
+
+      // ready は undefined の可能性があるので、存在チェックしてから使う
+      if (typeof grecaptcha.ready === "function") {
+        await new Promise<void>((resolve) => grecaptcha.ready!(resolve));
+      }
+
+      recaptchaToken = await grecaptcha.execute(
+        process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY as string,
+        { action: "submit" }
+      );
+
+      recaptchaToken = await grecaptcha.execute(
+        process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY as string,
+        { action: "submit" }
+      );
+    } catch (err) {
+      console.error("reCAPTCHA error", err);
+      setError(
+        "reCAPTCHA の検証に失敗しました。時間をおいて再度お試しください。"
+      );
+      return;
+    }
+
+    if (!recaptchaToken) {
+      setError("reCAPTCHA トークンの取得に失敗しました。");
+      return;
+    }
+
+    // ★ ここで初めて payload を作る
+    const payload: ReservationCreatePayload = {
+      ...basePayload,
+      recaptchaToken,
+    };
 
     // ③ 送信開始（ここでガードON）
     submitGuardRef.current = true;

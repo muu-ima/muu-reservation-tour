@@ -63,6 +63,7 @@ export type ReservationCreatePayload = {
     notebook_type?: string | null;
     has_certificate?: boolean | null;
     note?: string | null;
+    recaptchaToken?: string;
 };
 
 /** status の型ガード */
