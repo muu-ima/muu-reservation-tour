@@ -9,6 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class SyncReservationToWordPress implements ShouldQueue
 {
@@ -35,8 +36,11 @@ class SyncReservationToWordPress implements ShouldQueue
         $reservation = Reservation::find($this->reservationId);
 
         if (!$reservation) {
+            Log::warning('WP Sync: reservation not found', ['id' => $this->reservationId]);
             return;
         }
+
+        Log::info('WP Sync: start', ['id' => $reservation->id]);
 
         // --- WP接続情報 ---
         $base = rtrim(config('wp.base_url'), '/');
@@ -90,7 +94,7 @@ class SyncReservationToWordPress implements ShouldQueue
 
             // リトライへ
             $this->fail();
-            return;
+            throw new \Exception('WP Sync failed');
         }
 
         // --- 成功処理 ---
@@ -100,6 +104,10 @@ class SyncReservationToWordPress implements ShouldQueue
             'wp_post_id'     => $json['id'] ?? null,
             'wp_sync_status' => 'synced',
             'wp_synced_at'   => now('UTC'),
+        ]);
+        Log::info('WP Sync: success', [
+            'reservation_id' => $reservation->id,
+            'wp_post_id'     => $json['id'] ?? null,
         ]);
     }
 }
