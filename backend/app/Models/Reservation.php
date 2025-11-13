@@ -20,6 +20,10 @@ class Reservation extends Model
         'start_at', 'end_at',
         'verified_at', 'verify_token', 'verify_expires_at',
         'cancelled_at',
+          // ▼ WordPress 副本用
+        'wp_post_id',
+        'wp_sync_status',
+        'wp_synced_at',
     ];
 
     /** キャスト設定 */
@@ -31,6 +35,8 @@ class Reservation extends Model
         'verify_expires_at' => 'datetime',
         'cancelled_at'      => 'datetime',
         'has_certificate'   => 'boolean',
+                // ▼ WP同期日時
+        'wp_synced_at'      => 'datetime',
     ];
 
     /** ステータス定義 */
