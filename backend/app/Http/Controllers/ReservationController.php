@@ -18,6 +18,7 @@ use App\Mail\ReservationVerifyMail;
 use App\Mail\ReservationConfirmed;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Jobs\SyncReservationToWordPress;
 
 class ReservationController extends Controller
 {
@@ -115,7 +116,9 @@ class ReservationController extends Controller
                     'error' => $mailEx->getMessage(),
                 ]);
                 // 送信失敗でも予約自体は作成成功なので 201 を返す
+                // ✅ ここで副本WPへ同期Jobをキューに投げる
             }
+            SyncReservationToWordPress::dispatch($reservation->id)->afterCommit();
             return response()->json($reservation, 201);
         } catch (QueryException $e) {
             if ($this->looksLikeOverlap($e)) {
@@ -154,7 +157,6 @@ class ReservationController extends Controller
                     'trace' => collect($e->getTrace())->take(3),
                 ]);
             }
-
             return response()->json($payload, $status, $this->cors($request), $this->jsonFlags);
         }
     }
